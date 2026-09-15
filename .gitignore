@@ -1,0 +1,15 @@
+**/bin/
+**/obj/
+.vs/
+.idea/
+*.user
+*.suo
+*.zip
+*.dll
+*.pdb
+*.mdb
+.tools/
+reference/
+temp/
+*.local.json
+artifacts/

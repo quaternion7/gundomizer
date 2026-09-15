@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net5.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../plugin/SelectionPolicy.cs" Link="SelectionPolicy.cs" />
+    <Compile Include="../plugin/SpawnSafetyPolicy.cs" Link="SpawnSafetyPolicy.cs" />
+    <Compile Include="../plugin/IconGeometry.cs" Link="IconGeometry.cs" />
+  </ItemGroup>
+</Project>
