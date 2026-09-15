@@ -8,6 +8,7 @@
   <ItemGroup>
     <Compile Include="RuntimeSuite.cs" />
     <Compile Include="PerformanceChecks.cs" />
+    <Compile Include="SafetyChecks.cs" />
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net35" Version="1.0.3" PrivateAssets="all" />
     <PackageReference Include="BepInEx.Core" Version="5.4.17" />
     <PackageReference Include="UnityEngine" Version="5.6.1" />

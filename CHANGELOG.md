@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.9 — general initialization-failure cleanup
+
+- Remove the ReflexSightController-specific exclusion. Keep entries selectable, including items with missing preview artwork.
+- Clone under an inactive parent, detach before activation, and observe synchronous Unity initialization exceptions. Remove failed instances before they can Update; retain the selected entry and original error log.
+- Apply the same cleanup when accepting Gundomizer selections with native Spawn, including bundled secondary objects. Preserve shared loading limits and advance pads/counters only for successful objects.
+- Validate deliberate Awake failures, the reported HAM scope, valid spawns after failures, native bundled spawning, and attachment searches that span several clicks in the running game.
+
 ## 0.1.8 — bounded searches and loaded-connector indexing
 
 - Reuse the native filtered result snapshot instead of repeating filtering and UI redraws. Slice catalog preparation across frames and compact candidate lists in linear time.

@@ -20,6 +20,7 @@ namespace Gundomizer
         private static readonly MethodInfo Details = Method("RedrawDetailsCanvas");
         private static readonly MethodInfo CountGun = Method("IncrementSpawnedGuns");
         private readonly ItemSpawnerV2 spawner;
+        private readonly HashSet<string> managedSelections = new HashSet<string>(StringComparer.Ordinal);
 
         internal SpawnerBridge(ItemSpawnerV2 spawner) { this.spawner = spawner; }
         private static FieldInfo Field(string name) => AccessTools.Field(typeof(ItemSpawnerV2), name)
@@ -121,23 +122,31 @@ namespace Gundomizer
             Queue.Invoke(spawner, new object[] { entry.ItemID });
             Select.Invoke(spawner, new object[] { entry.ItemID });
             Details.Invoke(spawner, null);
+            managedSelections.Add(entry.ItemID);
         }
+
+        internal bool IsManagedSelection(string id) => id != null && managedSelections.Contains(id);
 
         internal UnityEngine.Transform SpawnPoint(ItemSpawnerID entry)
         {
             if (entry.UsesHugeSpawnPad) return spawner.SpawnPoint_Huge;
             if (entry.UsesLargeSpawnPad) return spawner.SpawnPoint_Large;
+            return SmallSpawnPoint();
+        }
+
+        internal UnityEngine.Transform SmallSpawnPoint()
+        {
             if (spawner.SpawnPoints_Small == null || spawner.SpawnPoints_Small.Count == 0) return null;
             int index = (int)SmallPosition.GetValue(spawner);
             if (index < 0 || index >= spawner.SpawnPoints_Small.Count) index = 0;
             return spawner.SpawnPoints_Small[index];
         }
 
-        internal void RecordSpawn(ItemSpawnerID entry)
+        internal void RecordSpawn(ItemSpawnerID entry, bool countFirearm = true)
         {
             int count = spawner.SpawnPoints_Small == null ? 0 : spawner.SpawnPoints_Small.Count;
             if (count > 0) SmallPosition.SetValue(spawner, ((int)SmallPosition.GetValue(spawner) + 1) % count);
-            if (entry.MainObject.Category == FVRObject.ObjectCategory.Firearm) CountGun.Invoke(spawner, null);
+            if (countFirearm && entry.MainObject.Category == FVRObject.ObjectCategory.Firearm) CountGun.Invoke(spawner, null);
         }
     }
 }

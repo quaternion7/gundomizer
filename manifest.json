@@ -1,6 +1,6 @@
 {
   "name": "Gundomizer",
-  "version_number": "0.1.8",
+  "version_number": "0.1.9",
   "website_url": "",
   "description": "Item Spawner V2 randomizer: roll the current section or items compatible with your held object. Local prototype.",
   "dependencies": ["BepInEx-BepInExPack_H3VR-5.4.1700"]

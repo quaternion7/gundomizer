@@ -114,15 +114,6 @@ static class Program
         Check(requirements.CouldMatch(CompatibilityKind.Firearm, 0, 0, "gun") &&
             !requirements.CouldMatch(CompatibilityKind.Unsupported, 0, 0, "cartridge"),
             "reverse matching permits firearm candidates while deferred categories stay excluded");
-        // Regression fixture: shipped HAMScope4x24/RedDotSight/_Interface has an empty Components
-        // list and a null UISpawnPoint. An empty list alone is legal; the missing transform is not.
-        Check(SpawnSafetyPolicy.ReflexSightProblem(false, true, false)?.Contains("UISpawnPoint") == true,
-            "HAM combo scope missing UI transform is rejected before native Awake");
-        Check(SpawnSafetyPolicy.ReflexSightProblem(true, true, false) == null,
-            "a valid reflex sight with no adjustment controls remains spawnable");
-        Check(SpawnSafetyPolicy.ReflexSightProblem(true, false, false) != null &&
-            SpawnSafetyPolicy.ReflexSightProblem(true, true, true) != null,
-            "null adjustment lists or elements are rejected before native iteration");
         Console.WriteLine(count + " checks passed.");
     }
 }

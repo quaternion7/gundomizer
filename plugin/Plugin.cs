@@ -7,7 +7,7 @@ using HarmonyLib;
 
 namespace Gundomizer
 {
-    [BepInPlugin("quaternion.gundomizer", "Gundomizer", "0.1.8")]
+    [BepInPlugin("quaternion.gundomizer", "Gundomizer", "0.1.9")]
     [BepInProcess("h3vr.exe")]
     public sealed class Plugin : BaseUnityPlugin
     {
@@ -37,7 +37,9 @@ namespace Gundomizer
                     postfix: new HarmonyMethod(typeof(Plugin), nameof(AfterStart)));
                 harmony.Patch(AccessTools.Method(typeof(ItemSpawnerV2), "RedrawDetailsCanvas"),
                     postfix: new HarmonyMethod(typeof(Plugin), nameof(AfterDetails)));
-                Logger.LogInfo("Gundomizer 0.1.8 loaded. Classic and tag viewer randomizer enabled.");
+                harmony.Patch(AccessTools.Method(typeof(ItemSpawnerV2), "BTN_Details_Spawn"),
+                    prefix: new HarmonyMethod(typeof(Plugin), nameof(BeforeSelectedSpawn)));
+                Logger.LogInfo("Gundomizer 0.1.9 loaded. Classic and tag viewer randomizer enabled.");
             }
             catch (Exception ex)
             {
@@ -64,6 +66,12 @@ namespace Gundomizer
                 if (controller != null && controller.enabled) controller.RefreshPreview(___m_selectedID);
             }
             catch (Exception ex) { Log.LogWarning("Could not refresh missing preview: " + ex.Message); }
+        }
+
+        private static bool BeforeSelectedSpawn(ItemSpawnerV2 __instance, string ___m_selectedID)
+        {
+            var controller = __instance.GetComponent<RandomizerController>();
+            return controller == null || !controller.enabled || !controller.SpawnManagedSelection(___m_selectedID);
         }
 
         private void OnDestroy()

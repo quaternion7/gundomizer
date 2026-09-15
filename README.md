@@ -8,11 +8,11 @@ Gundomizer adds compact, rounded icon buttons with a shaded sliding rainbow grad
 
 In tag-search mode, the dice and gun/hand buttons use the native results matching your selected tags, across all pages and in either grid or list view. Changing filters while an item loads cancels those rolls.
 
-Hover a button for its tooltip. Items spawn on the spawner's native pads and become the selected entry in the details panel. The buttons spawn **one main object**, without bundled secondary items or the stock random gun's attachment pile. The native Spawn and Random Gun controls retain their original behavior.
+Hover a button for its tooltip. Items spawn on the spawner's native pads and become the selected entry in the details panel. The buttons spawn **one main object**, without bundled secondary items or the stock random gun's attachment pile. Accepting a selection with native **Spawn** includes any bundled secondary item.
 
-**Version 0.1.8 is a local prototype.** Searches now limit new prefab loads and can resume after pausing. Plain random selection uses existing artwork without loading the item. A small background index reads already-loaded components without requesting assets or retaining their prefabs. See [the completion roadmap](docs/roadmap.md).
+**Version 0.1.9 is a local prototype.** Searches limit new prefab loads and can resume after pausing. Plain random selection uses existing artwork without loading the item. A small background index reads already-loaded components without requesting assets or retaining their prefabs. See [the completion roadmap](docs/roadmap.md).
 
-The reported HAM combo scope initialization error is documented in [the incident analysis](docs/incidents/2026-09-15-ham-scope.md). Gundomizer conservatively skips active reflex-sight prefabs missing references used by native `Awake`. The HAM is a registered spawnable item; failure without mods has not been reproduced. Other mods' configuration and native spawning behavior are unchanged.
+Missing preview artwork uses a generic icon and keeps the item selectable. There is no sight-specific exclusion: if a prefab logs an exception during synchronous cloning or activation, Gundomizer removes the failed instance, leaves its entry selected, and shows an error. This also covers the native **Spawn** button for entries selected through Gundomizer on that panel, while preserving bundled secondary items. It does not repair faulty components or cover later callbacks and other spawning tools. The [HAM incident analysis](docs/incidents/2026-09-15-ham-scope.md) records the current-profile reproduction; vanilla failure has not been established.
 
 ## Compatible means
 
@@ -42,7 +42,7 @@ dotnet run --project .\tests\Gundomizer.Tests.csproj -c Release
 The default deployment profile is **Development**. The deployment script creates the local ZIP, backs up this mod's prior files and the profile registry, installs only Gundomizer, and verifies the installed DLL hash. If r2modman was already displaying the profile, reselect it to refresh the mod list.
 
 Build output: `plugin/bin/Release/net35/quaternion.gundomizer.dll`.
-Local package: `artifacts/quaternion-Gundomizer-0.1.8.zip`.
+Local package: `artifacts/quaternion-Gundomizer-0.1.9.zip`.
 
 Please test category overview versus subcategory rolls, empty hands, magazine fit, an installed Picatinny adapter, occupied attachment mounts, hover tooltips, rapid clicks, and changing hands while an asset loads. See [the prototype plan](docs/extension-plan.md) for the full acceptance checklist.
 
@@ -61,7 +61,7 @@ In r2modman's Config Editor, open `BepInEx/config/quaternion.gundomizer.cfg`. Th
 - **true:** immediately spawn one main item and select its entry, as before.
 - **false:** only select the random entry in the native details panel and history. Use the native **Spawn** button to accept it, or click a randomizer button again to reroll. No object is created and no spawn pad or firearm counter advances during selection.
 
-Both modes keep the same section scope, compatibility checks, and malformed-prefab guard. Each roll uses the setting from when it was clicked. Edit the config while H3VR is closed, then launch the game. Manual spawning uses the native Spawn behavior, including any bundled secondary items.
+Both modes keep the same section scope and compatibility checks. Each roll uses the setting from when it was clicked. Edit the config while H3VR is closed, then launch the game. Accepting a selection with native Spawn includes any bundled secondary items and applies initialization-failure cleanup.
 
 ## Ammo choices
 
@@ -78,6 +78,7 @@ Only unlocked variants with an exact native item-spawner entry are listed, so se
 - [Original code findings and source map](docs/item-spawner-v2-analysis.md)
 - [Current prototype behavior and validation](docs/extension-plan.md)
 - [Research provenance](docs/research-baseline.md)
+- [Persistent metadata index experiment](docs/persistent-index-research.md)
 
 The runtime targets .NET Framework 3.5, using the same initial dependency baseline as other H3VR mods. The independent policy tests run on .NET 5. The compile-time H3VR.GameLibs package is checked against the locally installed game through `check-game-api.ps1`.
 

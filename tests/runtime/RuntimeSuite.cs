@@ -201,6 +201,10 @@ public static class RuntimeSuite
             var performanceChecks = PerformanceChecks.Run(spawner, controller, bridge, log);
             try { while (performanceChecks.MoveNext()) yield return performanceChecks.Current; }
             finally { (performanceChecks as IDisposable).Dispose(); }
+            var safetyChecks = SafetyChecks.Run(spawner, controller, log);
+            try { while (safetyChecks.MoveNext()) yield return safetyChecks.Current; }
+            finally { (safetyChecks as IDisposable).Dispose(); }
+            yield return null; // Settle fixture cleanup before counting normal attachment spawns.
             spawner.BTN_Tag_ClearSelectedTags();
             spawner.BTN_SetPageMode(3);
             for (int i = 0; i < 3; ++i)
@@ -208,10 +212,21 @@ public static class RuntimeSuite
                 config.Value = i == 2;
                 yield return new WaitForSecondsRealtime(0.35f);
                 log("ATTACHMENT ROLL " + i + " instant=" + config.Value);
-                Get<MonoBehaviour>(controller, "compatibleButton").GetComponent<Button>().onClick.Invoke();
                 deadline = Time.realtimeSinceStartup + 90;
-                while (Get<bool>(controller, "busy") && Time.realtimeSinceStartup < deadline) yield return null;
-                Check(!Get<bool>(controller, "busy"), "attachment roll " + i + " completed", log);
+                int clicks = 0;
+                do
+                {
+                    Get<MonoBehaviour>(controller, "compatibleButton").GetComponent<Button>().onClick.Invoke();
+                    ++clicks;
+                    while (Get<bool>(controller, "busy") && Time.realtimeSinceStartup < deadline) yield return null;
+                    if (Get<object>(controller, "pendingSearch") != null)
+                    {
+                        log("Resuming bounded attachment search after click " + clicks);
+                        yield return new WaitForSecondsRealtime(0.35f);
+                    }
+                } while (Get<object>(controller, "pendingSearch") != null && Time.realtimeSinceStartup < deadline);
+                Check(!Get<bool>(controller, "busy") && Get<object>(controller, "pendingSearch") == null,
+                    "attachment roll " + i + " completed in " + clicks + " click(s)", log);
                 string selected = Get<string>(spawner, "m_selectedID");
                 var attachment = IM.GetSpawnerID(selected).MainObject.GetGameObject().GetComponent<FVRFireArmAttachment>();
                 Check(attachment != null && attachment.CanAttach(), "selected attachment permits attachment: " + selected, log);

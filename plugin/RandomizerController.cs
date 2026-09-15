@@ -174,7 +174,11 @@ namespace Gundomizer
             List<AmmoCatalog.Variant> ammo = null, int ammoRevision = -1)
         {
             var metrics = new RollMetrics { Kind = ammo != null ? "Ammo" : compatible ? "Compatible" : "Random" };
-            var roll = Roll(compatible, held, hand, spawnInstantly, metrics, ammo, ammoRevision);
+            return Guarded(Roll(compatible, held, hand, spawnInstantly, metrics, ammo, ammoRevision), metrics);
+        }
+
+        private IEnumerator Guarded(IEnumerator roll, RollMetrics metrics)
+        {
             try
             {
                 while (true)
@@ -202,6 +206,77 @@ namespace Gundomizer
                 nextClick = Time.unscaledTime + 0.25f;
                 metrics.Log();
             }
+        }
+
+        internal bool SpawnManagedSelection(string id)
+        {
+            if (!Visible || !bridge.IsManagedSelection(id) || !IM.HasSpawnedID(id)) return false;
+            if (busy) return true;
+            var entry = IM.GetSpawnerID(id);
+            if (!SpawnerBridge.IsAvailable(entry)) return false;
+            pendingSearch = null;
+            busy = true;
+            status = "Loading " + entry.DisplayName + "...";
+            var metrics = new RollMetrics { Kind = "Native selection" };
+            StartCoroutine(Guarded(SpawnSelected(entry, metrics), metrics));
+            return true;
+        }
+
+        private IEnumerator SpawnSelected(ItemSpawnerID entry, RollMetrics metrics)
+        {
+            // Accepting a roll with native Spawn retains its main + SecondObject behavior.
+            // Gather the requested prefabs first, so a timeout cannot leave half a native set.
+            var sources = entry.SecondObject == null ? new[] { entry.MainObject } : new[] { entry.MainObject, entry.SecondObject };
+            var prefabs = new List<GameObject>();
+            float deadline = Time.realtimeSinceStartup + Plugin.SearchSeconds.Value;
+            foreach (var source in sources)
+            {
+                AnvilCallback<GameObject> request = null;
+                bool started = false;
+                while (request == null)
+                {
+                    if (AssetAccess.TryRequest(source, out request, out started)) break;
+                    if (Time.realtimeSinceStartup >= deadline)
+                    { Message("A shared item load is still pending. Press Spawn again to continue."); yield break; }
+                    yield return null;
+                }
+                metrics.BeginRequest();
+                if (started) ++metrics.NewLoads;
+                while (request != null && request.keepWaiting)
+                {
+                    if (Time.realtimeSinceStartup >= deadline)
+                    { Message("Item loading is still in progress. Press Spawn again to continue."); yield break; }
+                    metrics.NotePending();
+                    yield return null;
+                }
+                metrics.EndRequest();
+                var prefab = request == null ? null : request.Result;
+                if (prefab == null || prefab.GetComponent<FVRPhysicalObject>() == null)
+                { Message("Could not load " + entry.DisplayName + ". See the log."); yield break; }
+                ConnectorIndex.Observe(source, prefab);
+                prefabs.Add(prefab);
+            }
+            for (int i = 0; i < prefabs.Count; ++i)
+            {
+                var point = i == 0 ? bridge.SpawnPoint(entry) : bridge.SmallSpawnPoint();
+                if (point == null) { Message("This spawner has no spawn pad for this item."); yield break; }
+                var position = point.position;
+                if (i == 0 && (entry.UsesLargeSpawnPad || entry.UsesHugeSpawnPad)) position += Vector3.up * .2f;
+                GameObject spawned;
+                string problem;
+                if (!SpawnTransaction.TrySpawn(prefabs[i], position, point.rotation, entry, out spawned, out problem))
+                {
+                    metrics.Outcome = "initialization failed";
+                    Plugin.Log.LogError("Could not initialize " + sources[i].ItemID + "; removed the failed instance. " + problem);
+                    Message(i == 0 ? "Could not initialize " + entry.DisplayName + ". Failed instance removed; see the log."
+                        : "Main item spawned; a bundled item failed and was removed. See the log.");
+                    yield break;
+                }
+                bridge.RecordSpawn(entry, i == 0);
+            }
+            metrics.Outcome = "spawned";
+            spawner.Boop(1);
+            Message("Spawned " + entry.DisplayName);
         }
 
         private IEnumerator Roll(bool compatible, FVRPhysicalObject held, FVRViveHand hand, bool spawnInstantly,
@@ -329,15 +404,6 @@ namespace Gundomizer
                     ++metrics.CheckedPrefabs;
                     match = prefab != null && prefab.GetComponent<FVRPhysicalObject>() != null
                         && (ammo != null ? AmmoCatalog.Matches(held, prefab, variants[entry.ItemID]) : query == null || query.Matches(prefab));
-                    if (match)
-                    {
-                        string problem = PrefabGuard.Problem(prefab);
-                        if (problem != null)
-                        {
-                            LogSkipped(entry, new InvalidOperationException(problem));
-                            match = false;
-                        }
-                    }
                 }
                 catch (Exception ex) { LogSkipped(entry, ex); }
                 if (match)
@@ -363,11 +429,17 @@ namespace Gundomizer
                     }
                     var position = point.position;
                     if (entry.UsesLargeSpawnPad || entry.UsesHugeSpawnPad) position += Vector3.up * 0.2f;
-                    var spawned = Object.Instantiate(prefab, position, point.rotation);
-                    spawned.GetComponent<FVRPhysicalObject>().IDSpawnedFrom = entry;
-                    spawned.SetActive(true);
-                    bridge.RecordSpawn(entry);
                     bridge.SelectEntry(entry);
+                    GameObject spawned;
+                    string problem;
+                    if (!SpawnTransaction.TrySpawn(prefab, position, point.rotation, entry, out spawned, out problem))
+                    {
+                        metrics.Outcome = "initialization failed";
+                        Plugin.Log.LogError("Could not initialize " + entry.ItemID + "; removed the failed instance. " + problem);
+                        Message("Could not initialize " + entry.DisplayName + ". Failed instance removed; see the log.");
+                        yield break;
+                    }
+                    bridge.RecordSpawn(entry);
                     metrics.Outcome = "spawned";
                     spawner.Boop(1);
                     Plugin.Log.LogInfo("Spawned " + entry.ItemID + (compatible ? " compatible with " + Compatibility.Name(held) : ""));
