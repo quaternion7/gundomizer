@@ -59,7 +59,7 @@ Both modes keep the same section scope, compatibility checks, and malformed-pref
 ## Research and development
 
 - [Current scope and original requester background](docs/scope.md)
-- [Completion roadmap and native data findings](docs/roadmap.md)
+- [Roadmap and progress checklist](docs/roadmap.md)
 - [Original code findings and source map](docs/item-spawner-v2-analysis.md)
 - [Current prototype behavior and validation](docs/extension-plan.md)
 - [Research provenance](docs/research-baseline.md)
