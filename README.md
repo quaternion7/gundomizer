@@ -1,18 +1,18 @@
 # Gundomizer
 
-Gundomizer adds compact icon buttons with a sliding rainbow gradient to the bottom-left of H3VR's **Item Spawner V2**, in classic and tag-search modes:
+Gundomizer adds compact, rounded icon buttons with a shaded sliding rainbow gradient to the bottom-left of H3VR's **Item Spawner V2**, in classic and tag-search modes:
 
 - **Dice (Randomizer)** spawns one random item from the current section, across all pages. At the category overview, it includes all subcategories; inside a subcategory, it stays within that subcategory.
 - **Gun + hand (Compatible)** does the same, filtered by the object in your non-pointing hand. Hold a firearm and browse magazines, clips, speedloaders, or attachments. Installed rail adapters and attachment mounts are included. The button is gray when nothing is held.
-- **Cartridge (Ammo)** rolls one enabled ammo variant for the held object's caliber, independently of the current section or tags. The adjacent **arrow** opens its variant choices.
+- **Cartridge (Ammo)** rolls one enabled ammo variant for the held object's caliber, independently of the current section or tags. The joined gray **arrow** opens or closes its variant choices.
 
 In tag-search mode, the dice and gun/hand buttons use the native results matching your selected tags, across all pages and in either grid or list view. Changing filters while an item loads cancels those rolls.
 
 Hover a button for its tooltip. Items spawn on the spawner's native pads and become the selected entry in the details panel. The buttons spawn **one main object**, without bundled secondary items or the stock random gun's attachment pile. The native Spawn and Random Gun controls retain their original behavior.
 
-**Version 0.1.6 is a local prototype.** This increment adds compatible ammo and variant choices. Further search optimization and replacing the interim sight guard remain in [the completion roadmap](docs/roadmap.md).
+**Version 0.1.7 is a local prototype.** This increment refines the button styling and logo, groups the ammo controls, and supplies a generic preview icon when an item has no artwork. Missing artwork does not prevent native selection, history, or spawning. Further search optimization and replacing the interim sight guard remain in [the completion roadmap](docs/roadmap.md).
 
-The reported HAM combo scope initialization error is documented in [the incident analysis](docs/incidents/2026-09-15-ham-scope.md). Gundomizer conservatively skips active reflex-sight prefabs missing references used by native `Awake`. The HAM is a registered spawnable item; failure without mods has not been reproduced. Other mods' configuration and native spawner behavior are unchanged.
+The reported HAM combo scope initialization error is documented in [the incident analysis](docs/incidents/2026-09-15-ham-scope.md). Gundomizer conservatively skips active reflex-sight prefabs missing references used by native `Awake`. The HAM is a registered spawnable item; failure without mods has not been reproduced. Other mods' configuration and native spawning behavior are unchanged.
 
 ## Compatible means
 
@@ -42,7 +42,7 @@ dotnet run --project .\tests\Gundomizer.Tests.csproj -c Release
 The default deployment profile is **Development**. The deployment script creates the local ZIP, backs up this mod's prior files and the profile registry, installs only Gundomizer, and verifies the installed DLL hash. If r2modman was already displaying the profile, reselect it to refresh the mod list.
 
 Build output: `plugin/bin/Release/net35/quaternion.gundomizer.dll`.
-Local package: `artifacts/quaternion-Gundomizer-0.1.6.zip`.
+Local package: `artifacts/quaternion-Gundomizer-0.1.7.zip`.
 
 Please test category overview versus subcategory rolls, empty hands, magazine fit, an installed Picatinny adapter, occupied attachment mounts, hover tooltips, rapid clicks, and changing hands while an asset loads. See [the prototype plan](docs/extension-plan.md) for the full acceptance checklist.
 

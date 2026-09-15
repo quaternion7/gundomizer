@@ -16,7 +16,7 @@ $module = [Mono.Cecil.ModuleDefinition]::ReadModule($pluginPath, $parameters)
 $game = [Mono.Cecil.ModuleDefinition]::ReadModule((Join-Path $GameManagedPath 'Assembly-CSharp.dll'), $parameters)
 try {
     $spawner = $game.GetType('FistVR.ItemSpawnerV2')
-    foreach ($field in @('PMode','SMode','m_displayLevel','m_curTagGroup','m_selectedTags','WorkingItemIDs','m_curSmallPos')) {
+    foreach ($field in @('PMode','SMode','m_displayLevel','m_curTagGroup','m_selectedTags','WorkingItemIDs','m_curSmallPos','m_selectedID')) {
         if (-not ($spawner.Fields | Where-Object Name -EQ $field)) { throw "Missing spawner field: $field" }
     }
     foreach ($method in @('Start','RedrawSimpleCanvas','RedrawListCanvas','AddToSelectionQueue','SetSelectedID','RedrawDetailsCanvas','IncrementSpawnedGuns')) {

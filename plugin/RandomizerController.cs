@@ -20,6 +20,7 @@ namespace Gundomizer
         private GameObject tooltip;
         private Text tooltipText;
         private Texture2D rainbowTexture;
+        private PreviewFallback previewFallback;
         private bool busy;
         private float nextClick;
         private string status;
@@ -51,6 +52,25 @@ namespace Gundomizer
         }
 
         private bool Visible => spawner != null && bridge != null && bridge.IsBrowsingSection;
+
+        internal void RefreshPreview(string selectedId)
+        {
+            if (spawner == null || spawner.IM_Detail == null) return;
+            bool selected = !string.IsNullOrEmpty(selectedId) && IM.HasSpawnedID(selectedId);
+            if (previewFallback == null)
+            {
+                if (!selected || spawner.IM_Detail.sprite != null) return;
+                var obj = new GameObject("Gundomizer Missing Preview", typeof(RectTransform), typeof(CanvasRenderer), typeof(PreviewFallback));
+                obj.layer = spawner.IM_Detail.gameObject.layer;
+                var rect = (RectTransform)obj.transform;
+                rect.SetParent(spawner.IM_Detail.transform, false);
+                rect.anchorMin = Vector2.zero; rect.anchorMax = Vector2.one;
+                rect.offsetMin = rect.offsetMax = Vector2.zero;
+                previewFallback = obj.GetComponent<PreviewFallback>();
+                previewFallback.Initialize(spawner.IM_Detail);
+            }
+            previewFallback.Refresh(selected);
+        }
 
         internal bool CanClick(bool compatible)
         {
@@ -426,7 +446,7 @@ namespace Gundomizer
             if (nativeBackground == null) { Object.Destroy(clone); throw new InvalidOperationException("Native background missing."); }
             var backgroundObject = nativeBackground.gameObject;
             Object.DestroyImmediate(nativeBackground);
-            var background = backgroundObject.AddComponent<RawImage>();
+            var background = backgroundObject.AddComponent<ButtonSurface>();
             background.texture = rainbowTexture;
             background.raycastTarget = true;
             if (background.transform != rect)
@@ -476,6 +496,7 @@ namespace Gundomizer
 
         private void DestroyUi()
         {
+            if (previewFallback != null) Object.Destroy(previewFallback.gameObject);
             foreach (var pager in pagerOffsets) if (pager.Key != null) pager.Key.localPosition -= pager.Value;
             pagerOffsets.Clear();
             if (uiRoot != null) Object.Destroy(uiRoot.gameObject);

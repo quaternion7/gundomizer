@@ -10,7 +10,7 @@ namespace Gundomizer
     {
         internal RandomizerController Owner;
         internal bool Compatible;
-        internal RawImage Background;
+        internal ButtonSurface Background;
         internal Texture2D RainbowTexture;
         internal ButtonIcon Icon;
         internal Button UiButton;
@@ -50,7 +50,7 @@ namespace Gundomizer
             if (Background != null)
             {
                 Background.texture = ready && Rainbow ? RainbowTexture : Texture2D.whiteTexture;
-                Background.uvRect = new Rect(Mathf.Repeat(-Time.unscaledTime * 0.13f, 1f), 0f, 1f, 1f);
+                Background.uvRect = new Rect(ready && Rainbow ? Mathf.Repeat(-Time.unscaledTime * 0.13f, 1f) : 0f, 0f, 1f, 1f);
                 var color = ready ? new Color(Hovered ? 0.8f : 0.53f, Hovered ? 0.8f : 0.53f, Hovered ? 0.8f : 0.53f)
                     : new Color(0.19f, 0.19f, 0.19f);
                 color.a = 0.95f;

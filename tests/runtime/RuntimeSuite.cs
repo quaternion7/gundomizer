@@ -195,6 +195,9 @@ public static class RuntimeSuite
             var ammoChecks = AmmoChecks(spawner, controller, firearm, config, createdObjects, directory, log);
             try { while (ammoChecks.MoveNext()) yield return ammoChecks.Current; }
             finally { (ammoChecks as IDisposable).Dispose(); }
+            var previewChecks = PreviewChecks(spawner, controller, bridge, createdObjects, directory, log);
+            try { while (previewChecks.MoveNext()) yield return previewChecks.Current; }
+            finally { (previewChecks as IDisposable).Dispose(); }
             spawner.BTN_Tag_ClearSelectedTags();
             spawner.BTN_SetPageMode(3);
             for (int i = 0; i < 3; ++i)
@@ -261,6 +264,13 @@ public static class RuntimeSuite
             spawner.BTN_SetPageMode(1);
             spawner.BTN_SimpleMode_SwitchToSimpleMode();
             yield return new WaitForSecondsRealtime(0.35f);
+            Screenshot(root.parent as RectTransform, Path.Combine(directory, "buttons-ready.png"));
+            var rollBounds = RectTransformUtility.CalculateRelativeRectTransformBounds(root, Get<RawImage>(roll, "Background").rectTransform);
+            var toggleBounds = RectTransformUtility.CalculateRelativeRectTransformBounds(root, Get<RawImage>(toggle, "Background").rectTransform);
+            Check(Mathf.Abs(rollBounds.max.x - toggleBounds.min.x) < 0.01f,
+                "ammo roll and choices surfaces meet without a gap", log);
+            Check(Get<RawImage>(toggle, "Background").texture == Texture2D.whiteTexture,
+                "ammo choices uses a neutral surface while ammo roll remains rainbow", log);
             toggle.GetComponent<Button>().onClick.Invoke();
             yield return null;
             Check(popup.gameObject.activeInHierarchy, "ammo dropdown opens an anchored popup in classic mode", log);
@@ -329,6 +339,54 @@ public static class RuntimeSuite
         {
             foreach (var pair in originalChoices) Call(selection, "Set", pair.Key, pair.Value);
             Call(panel, "Hide");
+        }
+    }
+
+    private static IEnumerator PreviewChecks(ItemSpawnerV2 spawner, MonoBehaviour controller, object bridge,
+        List<GameObject> createdObjects, string directory, Action<string> log)
+    {
+        var entry = IM.GetSpawnerID(AM.STypeDic[FireArmRoundType.a9_19_Parabellum].Values.First(v => v.ObjectID != null).ObjectID.SpawnedFromId);
+        var originalSprite = entry.Sprite;
+        var prior = Get<string>(spawner, "m_selectedID");
+        var loading = AccessTools.Field(typeof(AnvilAsset), "m_loadingState");
+        var beforeLoad = loading.GetValue(entry.MainObject);
+        try
+        {
+            entry.Sprite = null; // A reversible missing-art fixture; never modify the asset on disk.
+            spawner.BTN_SetPageMode(2);
+            Call(bridge, "SelectEntry", entry);
+            var fallback = Get<MonoBehaviour>(controller, "previewFallback");
+            Check(Get<string>(spawner, "m_selectedID") == entry.ItemID && spawner.BTN_SpawnSelectedObject.activeSelf
+                && fallback != null && fallback.gameObject.activeInHierarchy && !spawner.IM_Detail.enabled,
+                "missing preview art retains native selection and Spawn with a generic icon", log);
+            Check(entry.Sprite == null && loading.GetValue(entry.MainObject) == beforeLoad,
+                "preview fallback does not mutate catalog art or request a prefab", log);
+            Call(bridge, "SelectEntry", IM.GetSpawnerID("SMGUziMini"));
+            Check(spawner.IM_Detail.enabled && !fallback.gameObject.activeSelf && spawner.IM_Detail.sprite != null,
+                "normal artwork returns when selecting another item", log);
+            Call(spawner, "DetailsQueuePrev");
+            Check(Get<string>(spawner, "m_selectedID") == entry.ItemID && fallback.gameObject.activeInHierarchy,
+                "native selection history restores the missing-art placeholder", log);
+            Screenshot(Get<RectTransform>(controller, "uiRoot").parent as RectTransform, Path.Combine(directory, "missing-preview.png"));
+            Check(entry.SecondObject == null, "native preview test cartridge has no bundled secondary object", log);
+            var before = new HashSet<int>(Object.FindObjectsOfType<FVRPhysicalObject>().Select(o => o.GetInstanceID()));
+            spawner.BTN_Details_Spawn();
+            float deadline = Time.realtimeSinceStartup + 60;
+            while (!Object.FindObjectsOfType<FVRPhysicalObject>().Any(o => !before.Contains(o.GetInstanceID()) && o.IDSpawnedFrom == entry)
+                && Time.realtimeSinceStartup < deadline) yield return null;
+            var added = Object.FindObjectsOfType<FVRPhysicalObject>().Where(o => !before.Contains(o.GetInstanceID())).ToArray();
+            foreach (var obj in added) createdObjects.Add(obj.gameObject);
+            Check(added.Length == 1 && added[0].IDSpawnedFrom == entry,
+                "native Spawn still creates the selected cartridge with missing preview art", log);
+            Call(spawner, "SetSelectedID", string.Empty);
+            Call(spawner, "RedrawDetailsCanvas");
+            Check(!fallback.gameObject.activeSelf && spawner.IM_Detail.enabled,
+                "clearing selection hides the placeholder and restores the native graphic", log);
+        }
+        finally
+        {
+            entry.Sprite = originalSprite;
+            if (!string.IsNullOrEmpty(prior) && IM.HasSpawnedID(prior)) Call(bridge, "SelectEntry", IM.GetSpawnerID(prior));
         }
     }
 

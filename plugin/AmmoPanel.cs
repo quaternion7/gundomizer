@@ -8,7 +8,7 @@ namespace Gundomizer
 {
     internal sealed class AmmoPanel
     {
-        internal const float GroupWidth = 204f;
+        internal const float GroupWidth = 200f;
         private const int PageSize = 7;
         private const float Width = 1200f;
         private const float Height = 850f;
@@ -41,11 +41,31 @@ namespace Gundomizer
             rollButton.NeedsHeldContext = true;
             rollButton.Ready = () => owner.CanClick(true) && enabledCount > 0;
             rollButton.Handler = owner.ClickAmmo;
-            toggleButton = owner.CloneButton(template, root, "Ammo choices", false, left + 164f, y, 80f);
+            toggleButton = owner.CloneButton(template, root, "Ammo choices", false, left + 160f, y, 80f);
             toggleButton.Icon.Dropdown = true; toggleButton.Icon.SetVerticesDirty();
+            toggleButton.Rainbow = false;
+            toggleButton.Background.texture = Texture2D.whiteTexture;
+            toggleButton.Background.color = new Color(0.13f, 0.16f, 0.19f, 1f);
+            // The two hit targets meet at one straight seam; only the outside corners are rounded.
+            rollButton.Background.RoundRight = false;
+            toggleButton.Background.RoundLeft = false;
+            var rollBackground = rollButton.Background.rectTransform;
+            rollBackground.offsetMax = new Vector2(0f, rollBackground.offsetMax.y);
+            var toggleBackground = toggleButton.Background.rectTransform;
+            toggleBackground.offsetMin = new Vector2(0f, toggleBackground.offsetMin.y);
+            var separator = new GameObject("Group separator", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image)).GetComponent<Image>();
+            separator.gameObject.layer = template.layer;
+            separator.rectTransform.SetParent(toggleButton.transform, false);
+            separator.rectTransform.anchorMin = new Vector2(0, 0);
+            separator.rectTransform.anchorMax = new Vector2(0, 1);
+            separator.rectTransform.offsetMin = new Vector2(0, 4);
+            separator.rectTransform.offsetMax = new Vector2(0.75f, -4);
+            separator.rectTransform.localPosition += new Vector3(0, 0, -0.015f);
+            separator.color = new Color(0.65f, 0.68f, 0.7f, 0.6f);
+            separator.raycastTarget = false;
             toggleButton.NeedsHeldContext = true;
             toggleButton.Ready = () => owner.CanClick(true) && variants.Count > 0;
-            toggleButton.Handler = hand => { if (IsOpen) Hide(); else { Refresh(held, true); Redraw(); popup.gameObject.SetActive(true); } };
+            toggleButton.Handler = hand => { if (IsOpen) Hide(); else { Refresh(held, true); Redraw(); SetOpen(true); } };
 
             popup = (RectTransform)new GameObject("Gundomizer Ammo Choices", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image),
                 typeof(BoxCollider), typeof(FVRPointable)).transform;
@@ -165,7 +185,13 @@ namespace Gundomizer
                 : "Random compatible ammo for " + Compatibility.Name(held) + " (" + enabledCount + " variants enabled)")
             : toggleButton.Hovered ? "Choose ammo variants for " + Compatibility.Name(held) : null;
 
-        internal void Hide() { popup.gameObject.SetActive(false); }
+        private void SetOpen(bool open)
+        {
+            popup.gameObject.SetActive(open);
+            toggleButton.Icon.rectTransform.localRotation = Quaternion.Euler(0, 0, open ? 180f : 0f);
+        }
+
+        internal void Hide() { SetOpen(false); }
 
         internal void Update()
         {

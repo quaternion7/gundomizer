@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.7 — button polish and missing previews
+
+- Round the rainbow surfaces and add subtle vertical shading and edge bevels, preserving the sliding gradient and full-size pointing targets.
+- Join the ammo roll and neutral gray popup toggle at a thin separator. Reverse the arrow while the popup is open.
+- Restyle the package logo with the spawner's framed button appearance, serif lettering, and a dice mark.
+- Show a generic package icon for missing native preview artwork; keep the entry, history and native Spawn usable without changing shared item definitions or requesting prefabs. The separate sight-initialization guard remains pending a broader solution.
+
 ## 0.1.6 — compatible ammo and variant choices
 
 - Add an ammo-roll button with an adjacent popup toggle in both viewer modes. Use the held object's caliber independently of the browser category or tags.

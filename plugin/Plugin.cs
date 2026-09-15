@@ -7,7 +7,7 @@ using HarmonyLib;
 
 namespace Gundomizer
 {
-    [BepInPlugin("quaternion.gundomizer", "Gundomizer", "0.1.6")]
+    [BepInPlugin("quaternion.gundomizer", "Gundomizer", "0.1.7")]
     [BepInProcess("h3vr.exe")]
     public sealed class Plugin : BaseUnityPlugin
     {
@@ -27,7 +27,9 @@ namespace Gundomizer
                 harmony = new Harmony("quaternion.gundomizer");
                 harmony.Patch(AccessTools.Method(typeof(ItemSpawnerV2), "Start"),
                     postfix: new HarmonyMethod(typeof(Plugin), nameof(AfterStart)));
-                Logger.LogInfo("Gundomizer 0.1.6 loaded. Classic and tag viewer randomizer enabled.");
+                harmony.Patch(AccessTools.Method(typeof(ItemSpawnerV2), "RedrawDetailsCanvas"),
+                    postfix: new HarmonyMethod(typeof(Plugin), nameof(AfterDetails)));
+                Logger.LogInfo("Gundomizer 0.1.7 loaded. Classic and tag viewer randomizer enabled.");
             }
             catch (Exception ex)
             {
@@ -43,6 +45,16 @@ namespace Gundomizer
                     __instance.gameObject.AddComponent<RandomizerController>().Initialize(__instance);
             }
             catch (Exception ex) { Log.LogError("Could not add Gundomizer buttons: " + ex); }
+        }
+
+        private static void AfterDetails(ItemSpawnerV2 __instance, string ___m_selectedID)
+        {
+            try
+            {
+                var controller = __instance.GetComponent<RandomizerController>();
+                if (controller != null && controller.enabled) controller.RefreshPreview(___m_selectedID);
+            }
+            catch (Exception ex) { Log.LogWarning("Could not refresh missing preview: " + ex.Message); }
         }
 
         private void OnDestroy()
