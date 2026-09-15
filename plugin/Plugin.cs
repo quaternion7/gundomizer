@@ -7,7 +7,7 @@ using HarmonyLib;
 
 namespace Gundomizer
 {
-    [BepInPlugin("quaternion.gundomizer", "Gundomizer", "0.1.4")]
+    [BepInPlugin("quaternion.gundomizer", "Gundomizer", "0.1.5")]
     [BepInProcess("h3vr.exe")]
     public sealed class Plugin : BaseUnityPlugin
     {
@@ -27,7 +27,7 @@ namespace Gundomizer
                 harmony = new Harmony("quaternion.gundomizer");
                 harmony.Patch(AccessTools.Method(typeof(ItemSpawnerV2), "Start"),
                     postfix: new HarmonyMethod(typeof(Plugin), nameof(AfterStart)));
-                Logger.LogInfo("Gundomizer 0.1.4 loaded. Classic viewer randomizer enabled.");
+                Logger.LogInfo("Gundomizer 0.1.5 loaded. Classic and tag viewer randomizer enabled.");
             }
             catch (Exception ex)
             {

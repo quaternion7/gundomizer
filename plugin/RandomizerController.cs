@@ -14,6 +14,7 @@ namespace Gundomizer
         private SpawnerBridge bridge;
         private RandomizerButton randomButton;
         private RandomizerButton compatibleButton;
+        private RectTransform uiRoot;
         private GameObject tooltip;
         private Text tooltipText;
         private Texture2D rainbowTexture;
@@ -37,7 +38,7 @@ namespace Gundomizer
             try
             {
                 BuildUi();
-                Plugin.Log.LogInfo("Added classic-viewer randomizer buttons to " + owner.name);
+                Plugin.Log.LogInfo("Added classic/tag-viewer randomizer buttons to " + owner.name);
             }
             catch
             {
@@ -47,7 +48,7 @@ namespace Gundomizer
             }
         }
 
-        private bool Visible => spawner != null && bridge != null && bridge.IsClassicSection;
+        private bool Visible => spawner != null && bridge != null && bridge.IsBrowsingSection;
 
         internal bool CanClick(bool compatible)
         {
@@ -68,10 +69,9 @@ namespace Gundomizer
 
         private void Update()
         {
-            if (randomButton == null || compatibleButton == null || spawner == null) return;
+            if (randomButton == null || compatibleButton == null || uiRoot == null || spawner == null) return;
             bool visible = Visible;
-            if (randomButton.gameObject.activeSelf != visible) randomButton.gameObject.SetActive(visible);
-            if (compatibleButton.gameObject.activeSelf != visible) compatibleButton.gameObject.SetActive(visible);
+            if (uiRoot.gameObject.activeSelf != visible) uiRoot.gameObject.SetActive(visible);
             if (!visible)
             {
                 cachedHeldItem = null;
@@ -85,8 +85,8 @@ namespace Gundomizer
             if (busy || Time.unscaledTime < statusUntil) message = status;
             else if (compatibleButton.Hovered)
                 message = "Random COMPATIBLE item of held item [" +
-                    (cachedHeldItem == null ? "none" : cachedHeldName) + "] (of current section)";
-            else if (randomButton.Hovered) message = "Random Item (of current section)";
+                    (cachedHeldItem == null ? "none" : cachedHeldName) + "] (" + bridge.ScopeDescription + ")";
+            else if (randomButton.Hovered) message = "Random Item (" + bridge.ScopeDescription + ")";
             tooltip.SetActive(!string.IsNullOrEmpty(message));
             if (message != null && tooltipText.text != message)
             {
@@ -148,7 +148,7 @@ namespace Gundomizer
         private IEnumerator Roll(bool compatible, FVRPhysicalObject held, FVRViveHand hand, bool spawnInstantly,
             RollMetrics metrics)
         {
-            string context = bridge.ContextKey;
+            var context = bridge.CaptureContext();
             var candidates = bridge.CaptureSection();
             metrics.SectionCount = candidates.Count;
             // Rule out unrelated feed connectors and unsupported relationships using metadata
@@ -246,16 +246,17 @@ namespace Gundomizer
                 if (++inspected % 8 == 0) yield return null;
             }
             metrics.Outcome = "no matches";
-            Message(compatible ? "No compatible items in this section for " + Compatibility.Name(held) + "."
-                : "No spawnable items in this section.");
+            string scope = bridge.IsTagMode ? "matching these tags" : "in this section";
+            Message(compatible ? "No compatible items " + scope + " for " + Compatibility.Name(held) + "."
+                : "No spawnable items " + scope + ".");
         }
 
-        private bool StillValid(string context, bool compatible, FVRPhysicalObject held, FVRViveHand hand,
+        private bool StillValid(SpawnerBridge.Context context, bool compatible, FVRPhysicalObject held, FVRViveHand hand,
             bool checkLiveHand = false)
         {
-            if (!Visible || bridge.ContextKey != context)
+            if (!Visible || !bridge.MatchesContext(context))
             {
-                Message("Section changed. Randomizer cancelled."); return false;
+                Message("Section or filters changed. Randomizer cancelled."); return false;
             }
             // Loading uses the 1 Hz cache; click and commit are the only on-demand hand reads.
             if (compatible && checkLiveHand) RefreshHeldItem(hand);
@@ -291,6 +292,9 @@ namespace Gundomizer
                 throw new InvalidOperationException("Missing native classic-viewer layout references.");
             var parent = source.parent as RectTransform;
             if (parent == null) throw new InvalidOperationException("Expected a native RectTransform parent.");
+            var canvas = parent.parent as RectTransform;
+            if (canvas == null || canvas.GetComponent<Canvas>() == null)
+                throw new InvalidOperationException("Expected the shared native spawner canvas.");
             var tile = spawner.IMG_SimpleTiles[0].rectTransform;
             var tileBounds = RectTransformUtility.CalculateRelativeRectTransformBounds(parent, tile);
             var prevBounds = RectTransformUtility.CalculateRelativeRectTransformBounds(parent, previous);
@@ -303,6 +307,17 @@ namespace Gundomizer
             if (diceWidth + compatibleWidth + gap > right - left)
                 throw new InvalidOperationException("Insufficient free space beside native paging controls.");
             float y = source.localPosition.y;
+            // A sibling of the native mode panels stays visible in both modes. Copy the classic
+            // coordinate space exactly, so button positions, scale, and collider sizes stay unchanged.
+            uiRoot = (RectTransform)new GameObject("Gundomizer Controls", typeof(RectTransform)).transform;
+            uiRoot.gameObject.layer = template.layer;
+            uiRoot.SetParent(canvas, false);
+            uiRoot.anchorMin = parent.anchorMin; uiRoot.anchorMax = parent.anchorMax;
+            uiRoot.pivot = parent.pivot; uiRoot.sizeDelta = parent.sizeDelta;
+            uiRoot.anchoredPosition3D = parent.anchoredPosition3D;
+            uiRoot.localRotation = parent.localRotation; uiRoot.localScale = parent.localScale;
+            uiRoot.gameObject.SetActive(false);
+            parent = uiRoot;
             rainbowTexture = MakeRainbowTexture();
             randomButton = CloneButton(template, parent, "Randomizer", false, left + diceWidth * 0.5f, y, diceWidth);
             compatibleButton = CloneButton(template, parent, "Compatible", true,
@@ -335,6 +350,7 @@ namespace Gundomizer
             textRect.anchorMin = Vector2.zero; textRect.anchorMax = Vector2.one;
             textRect.offsetMin = new Vector2(28f, 24f); textRect.offsetMax = new Vector2(-28f, -24f);
             tooltip.SetActive(false);
+            uiRoot.gameObject.SetActive(Visible);
         }
 
         private RandomizerButton CloneButton(GameObject template, RectTransform parent, string text,
@@ -405,15 +421,13 @@ namespace Gundomizer
             button.Owner = this; button.Compatible = compatible; button.MaxPointingRange = range;
             button.Icon = icon; button.Background = background; button.RainbowTexture = rainbowTexture; button.UiButton = ui;
             ui.onClick.AddListener(() => Click(compatible, null));
-            clone.SetActive(Visible);
+            clone.SetActive(true); // Mode visibility belongs to the shared root.
             return button;
         }
 
         private void DestroyUi()
         {
-            if (randomButton != null) Object.Destroy(randomButton.gameObject);
-            if (compatibleButton != null) Object.Destroy(compatibleButton.gameObject);
-            if (tooltip != null) Object.Destroy(tooltip);
+            if (uiRoot != null) Object.Destroy(uiRoot.gameObject);
             if (rainbowTexture != null) Object.Destroy(rainbowTexture);
         }
 

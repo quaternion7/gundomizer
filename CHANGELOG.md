@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.5 — tag-search support
+
+- Show the existing buttons in the same position in classic and tag-search modes, including grid and text lists.
+- Reuse the complete native tag-filtered result set across all pages. Cancel pending rolls when the page, mode, or selected tags change.
+- Keep compatible filtering, instant-spawn/selection behavior, and nearby 1 Hz hand detection in both modes.
+
 ## 0.1.4 — compatibility query reuse and timings
 
 - Preserve the user's revised tooltips, selection message, and config description in a committed baseline.

@@ -5,9 +5,11 @@
     <IsPackable>false</IsPackable>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Remove="runtime/**/*.cs" />
     <Compile Include="../plugin/SelectionPolicy.cs" Link="SelectionPolicy.cs" />
     <Compile Include="../plugin/SpawnSafetyPolicy.cs" Link="SpawnSafetyPolicy.cs" />
     <Compile Include="../plugin/IconGeometry.cs" Link="IconGeometry.cs" />
     <Compile Include="../plugin/CompatibilityRequirements.cs" Link="CompatibilityRequirements.cs" />
+    <Compile Include="../plugin/TagSelectionSnapshot.cs" Link="TagSelectionSnapshot.cs" />
   </ItemGroup>
 </Project>

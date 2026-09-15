@@ -41,6 +41,20 @@ static class Program
         Check(unique.Count == 2, "duplicate registry entries do not weight the roll");
         page.Clear();
         Check(overview.Count == 55, "captured section is isolated from subsequent registry mutation");
+        var tags = new Dictionary<int, List<string>> { { 1, new List<string> { "Pistol", "Revolver" } }, { 2, new List<string> { "Modern" } } };
+        var snapshot = new TagSelectionSnapshot<int>(tags);
+        tags[1].Reverse();
+        Check(snapshot.Matches(tags), "reordering selected tags does not cancel a pending roll");
+        tags[1][0] = "Rifle";
+        Check(!snapshot.Matches(tags), "changing a native tag invalidates the captured roll without mutating its snapshot");
+        tags[1] = new List<string> { "Pistol", "Revolver" };
+        tags[3] = tags[2]; tags.Remove(2);
+        Check(!snapshot.Matches(tags), "the same tag in a different filter category is a context change");
+        Check(new TagSelectionSnapshot<int>(null).Matches(new Dictionary<int, List<string>>()),
+            "an absent tag selection equals an empty selection");
+        tags.Clear(); tags[1] = new List<string>();
+        Check(!new TagSelectionSnapshot<int>(tags).Matches(null),
+            "native empty filter groups are preserved rather than silently broadening a query");
         var perm = new List<string>(overview);
         SelectionPolicy.Shuffle(perm, new Random(42));
         Check(new HashSet<string>(perm).SetEquals(overview) && perm.Count == overview.Count,

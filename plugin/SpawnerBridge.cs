@@ -12,9 +12,11 @@ namespace Gundomizer
         private static readonly FieldInfo Search = Field("SMode");
         private static readonly FieldInfo Levels = Field("m_displayLevel");
         private static readonly FieldInfo Group = Field("m_curTagGroup");
+        private static readonly FieldInfo SelectedTags = Field("m_selectedTags");
         private static readonly FieldInfo Working = Field("WorkingItemIDs");
         private static readonly FieldInfo SmallPosition = Field("m_curSmallPos");
         private static readonly MethodInfo Redraw = Method("RedrawSimpleCanvas");
+        private static readonly MethodInfo RedrawTagList = Method("RedrawListCanvas");
         private static readonly MethodInfo Queue = Method("AddToSelectionQueue");
         private static readonly MethodInfo Select = Method("SetSelectedID");
         private static readonly MethodInfo Details = Method("RedrawDetailsCanvas");
@@ -29,21 +31,24 @@ namespace Gundomizer
         internal static void Validate() { if (Page == null) throw new InvalidOperationException(); }
 
         internal ItemSpawnerV2.PageMode PageMode => (ItemSpawnerV2.PageMode)Page.GetValue(spawner);
-        internal bool IsClassicSection
+        private ItemSpawnerV2.SearchMode SearchMode => (ItemSpawnerV2.SearchMode)Search.GetValue(spawner);
+        internal bool IsTagMode => SearchMode == ItemSpawnerV2.SearchMode.Tag;
+        internal string ScopeDescription => IsTagMode ? "matching current tags" : "of current section";
+        internal bool IsBrowsingSection
         {
             get
             {
                 var page = PageMode;
-                return (ItemSpawnerV2.SearchMode)Search.GetValue(spawner) == ItemSpawnerV2.SearchMode.Simple
+                var mode = SearchMode;
+                return (mode == ItemSpawnerV2.SearchMode.Simple || mode == ItemSpawnerV2.SearchMode.Tag)
                     && page >= ItemSpawnerV2.PageMode.Firearms && page <= ItemSpawnerV2.PageMode.ToolsToys;
             }
         }
 
-        internal string ContextKey
+        private string ClassicContextKey
         {
             get
             {
-                if (!IsClassicSection) return string.Empty;
                 var page = PageMode;
                 var levels = (Dictionary<ItemSpawnerV2.PageMode, ItemSpawnerV2.SimpleDisplayLevel>)Levels.GetValue(spawner);
                 var groups = (Dictionary<ItemSpawnerV2.PageMode, ItemSpawnerCategoryDefinitionsV2.SpawnerPage.SpawnerTagGroup>)Group.GetValue(spawner);
@@ -53,18 +58,53 @@ namespace Gundomizer
             }
         }
 
+        internal sealed class Context
+        {
+            internal ItemSpawnerV2.PageMode Page;
+            internal ItemSpawnerV2.SearchMode Mode;
+            internal string ClassicKey;
+            internal TagSelectionSnapshot<TagType> Tags;
+        }
+
+        private Dictionary<TagType, List<string>> TagsForCurrentPage()
+        {
+            var pages = (Dictionary<ItemSpawnerV2.PageMode, Dictionary<TagType, List<string>>>)SelectedTags.GetValue(spawner);
+            Dictionary<TagType, List<string>> tags;
+            return pages != null && pages.TryGetValue(PageMode, out tags) ? tags : null;
+        }
+
+        internal Context CaptureContext() => new Context
+        {
+            Page = PageMode,
+            Mode = SearchMode,
+            ClassicKey = IsTagMode ? null : ClassicContextKey,
+            Tags = IsTagMode ? new TagSelectionSnapshot<TagType>(TagsForCurrentPage()) : null
+        };
+
+        internal bool MatchesContext(Context context)
+        {
+            if (!IsBrowsingSection || context == null || context.Page != PageMode || context.Mode != SearchMode) return false;
+            return IsTagMode ? context.Tags.Matches(TagsForCurrentPage()) : context.ClassicKey == ClassicContextKey;
+        }
+
         internal List<ItemSpawnerID> CaptureSection()
         {
             var result = new List<ItemSpawnerID>();
-            if (!IsClassicSection) return result;
-            // Native redraw computes the current subcategory across ALL pages. Overview leaves
-            // WorkingItemIDs stale, so use the page registry directly at that level.
-            Redraw.Invoke(spawner, null);
+            if (!IsBrowsingSection) return result;
+            // Both redraw paths compute the complete result before pagination. Only the classic
+            // category overview leaves WorkingItemIDs stale and needs the full page registry.
+            bool tagMode = IsTagMode;
+            (tagMode ? RedrawTagList : Redraw).Invoke(spawner, null);
             var page = PageMode;
-            var levels = (Dictionary<ItemSpawnerV2.PageMode, ItemSpawnerV2.SimpleDisplayLevel>)Levels.GetValue(spawner);
+            bool categoryOverview = false;
+            if (!tagMode)
+            {
+                var levels = (Dictionary<ItemSpawnerV2.PageMode, ItemSpawnerV2.SimpleDisplayLevel>)Levels.GetValue(spawner);
+                categoryOverview = levels[page] == ItemSpawnerV2.SimpleDisplayLevel.Subcategory;
+            }
             List<string> pageIds;
             if (!ManagerSingleton<IM>.Instance.PageItemLists.TryGetValue(page, out pageIds)) return result;
-            var ids = SelectionPolicy.SectionIds(levels[page] == ItemSpawnerV2.SimpleDisplayLevel.Subcategory,
+            var ids = SelectionPolicy.SectionIds(categoryOverview,
                 pageIds, (List<string>)Working.GetValue(spawner));
             foreach (var id in ids)
             {

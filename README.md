@@ -1,13 +1,15 @@
 # Gundomizer
 
-Gundomizer adds two compact icon buttons with a sliding rainbow gradient to the bottom-left of H3VR's **classic Item Spawner V2 viewer**:
+Gundomizer adds two compact icon buttons with a sliding rainbow gradient to the bottom-left of H3VR's **Item Spawner V2**, in classic and tag-search modes:
 
 - **Dice (Randomizer)** spawns one random item from the current section, across all pages. At the category overview, it includes all subcategories; inside a subcategory, it stays within that subcategory.
 - **Gun + hand (Compatible)** does the same, filtered by the object in your non-pointing hand. Hold a firearm and browse magazines, clips, speedloaders, or attachments. Installed rail adapters and attachment mounts are included. The button is gray when nothing is held.
 
+In tag-search mode, both buttons use the native results matching your selected tags, across all pages and in either grid or list view. Changing filters while an item loads cancels that roll.
+
 Hover a button for its tooltip. Items spawn on the spawner's native pads and become the selected entry in the details panel. The buttons spawn **one main object**, without bundled secondary items or the stock random gun's attachment pile. The native Spawn and Random Gun controls retain their original behavior.
 
-**Version 0.1.4 is a local prototype.** The user confirmed the 0.1.3 playtest. This increment reuses held-object compatibility data during a roll and logs search timing; its runtime performance and fit checks are pending. Ammo toggles, tag-mode controls, and replacing the interim sight guard are planned in [the completion roadmap](docs/roadmap.md).
+**Version 0.1.5 is a local prototype.** This increment adds tag-search support. Ammo toggles, further search optimization, and replacing the interim sight guard are planned in [the completion roadmap](docs/roadmap.md).
 
 The reported HAM combo scope initialization error is documented in [the incident analysis](docs/incidents/2026-09-15-ham-scope.md). Gundomizer conservatively skips active reflex-sight prefabs missing references used by native `Awake`. The HAM is a registered spawnable item; failure without mods has not been reproduced. Other mods' configuration and native spawner behavior are unchanged.
 
@@ -21,9 +23,9 @@ The reported HAM combo scope initialization error is documented in [the incident
 
 Compatibility is determined from the game's native rules and available item data. Mods with extra custom fitting rules or incomplete metadata need in-game validation; unsupported matches are skipped rather than guessed. A compatible roll with no matches displays a message and spawns nothing. Changing the section or held target during loading cancels the roll.
 
-The controls appear in classic browsing mode. Tag-search controls are unchanged. Hover tooltips read “Random Item of current section” and “Any COMPATIBLE item of current section (held item: {name})”.
+Hover tooltips describe the current section or selected-tag scope, and the compatible tooltip names the held object.
 
-Held-item context refreshes **once per second**, only for visible classic panels within **8 metres** of the player's VR head. Readiness and tooltips use that cache; hand changes can take up to one second to appear. Compatible clicks and the final selection/spawn step check live context again. A click can therefore use a newly picked-up item immediately, and a pending roll cannot commit against a stale target. Detailed compatibility searches run only for a requested roll. The rainbow continues animating smoothly each frame.
+Held-item context refreshes **once per second**, only for visible browsing panels within **8 metres** of the player's VR head. Readiness and tooltips use that cache; hand changes can take up to one second to appear. Compatible clicks and the final selection/spawn step check live context again. A click can therefore use a newly picked-up item immediately, and a pending roll cannot commit against a stale target. Detailed compatibility searches run only for a requested roll. The rainbow continues animating smoothly each frame.
 
 ## Installation and testing
 
@@ -39,11 +41,13 @@ dotnet run --project .\tests\Gundomizer.Tests.csproj -c Release
 The default deployment profile is **Development**. The deployment script creates the local ZIP, backs up this mod's prior files and the profile registry, installs only Gundomizer, and verifies the installed DLL hash. If r2modman was already displaying the profile, reselect it to refresh the mod list.
 
 Build output: `plugin/bin/Release/net35/quaternion.gundomizer.dll`.
-Local package: `artifacts/quaternion-Gundomizer-0.1.4.zip`.
+Local package: `artifacts/quaternion-Gundomizer-0.1.5.zip`.
 
 Please test category overview versus subcategory rolls, empty hands, magazine fit, an installed Picatinny adapter, occupied attachment mounts, hover tooltips, rapid clicks, and changing hands while an asset loads. See [the prototype plan](docs/extension-plan.md) for the full acceptance checklist.
 
 For performance testing, compare the first compatible roll with subsequent rolls in the same section. Each compatible request logs its outcome, section/filtered counts, prefab requests/checks, requests that waited, observed load-wait time, and total time. A cached asset request may complete immediately; these are observed request timings, not a measurement of disk I/O alone. This version does not preload the item catalog or create a startup compatibility matrix.
+
+An opt-in [runtime test harness](docs/runtime-testing.md) can launch the dev profile without VR, exercise the real spawner, simulate held-object state, and capture panel images and timings. Its DLL is excluded from the release package.
 
 ## Settings
 

@@ -43,7 +43,7 @@ if ($modsHash) {
   authorName: quaternion
   websiteUrl: ''
   displayName: Gundomizer
-  description: 'Classic Item Spawner V2 randomizer - local prototype.'
+  description: 'Item Spawner V2 randomizer - local prototype.'
   gameVersion: ''
   networkMode: ''
   packageType: ''
