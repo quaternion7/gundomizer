@@ -16,6 +16,15 @@ namespace Gundomizer
     {
         internal static readonly IconShape[] Dice = MakeDice();
         internal static readonly IconShape[] GunAndHand = MakeGunAndHand();
+        internal static readonly IconShape[] Cartridge = {
+            new IconShape(false, 34,35, 34,23, 50,5, 66,23, 66,35),
+            new IconShape(false, 32,39, 68,39, 68,85, 32,85),
+            new IconShape(false, 28,89, 72,89, 72,96, 28,96)
+        };
+        internal static readonly IconShape[] Chevron = {
+            new IconShape(false, 12,35, 50,65, 50,80, 12,50),
+            new IconShape(false, 50,65, 88,35, 88,50, 50,80)
+        };
 
         private static IconShape[] MakeDice()
         {

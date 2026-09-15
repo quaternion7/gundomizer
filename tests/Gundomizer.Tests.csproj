@@ -11,5 +11,6 @@
     <Compile Include="../plugin/IconGeometry.cs" Link="IconGeometry.cs" />
     <Compile Include="../plugin/CompatibilityRequirements.cs" Link="CompatibilityRequirements.cs" />
     <Compile Include="../plugin/TagSelectionSnapshot.cs" Link="TagSelectionSnapshot.cs" />
+    <Compile Include="../plugin/AmmoSelection.cs" Link="AmmoSelection.cs" />
   </ItemGroup>
 </Project>

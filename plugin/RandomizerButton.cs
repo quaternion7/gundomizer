@@ -1,3 +1,4 @@
+using System;
 using FistVR;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -13,6 +14,20 @@ namespace Gundomizer
         internal Texture2D RainbowTexture;
         internal ButtonIcon Icon;
         internal Button UiButton;
+        internal Text Caption;
+        internal Action<FVRViveHand> Handler;
+        internal Func<bool> Ready;
+        internal bool Rainbow = true;
+        internal bool NeedsHeldContext;
+        private float nextActivation;
+        internal void Activate(FVRViveHand hand)
+        {
+            if (Time.unscaledTime < nextActivation || Owner == null || !Owner.CanClick(false)) return;
+            if (Compatible || NeedsHeldContext) Owner.RefreshHeldItem(hand);
+            if (!(Ready == null ? Owner.CanClick(Compatible) : Ready())) return;
+            nextActivation = Time.unscaledTime + 0.15f;
+            if (Handler != null) Handler(hand); else Owner.Click(Compatible, hand);
+        }
         private bool mouseHover;
         internal bool Hovered => m_isBeingPointedAt || mouseHover;
 
@@ -20,7 +35,7 @@ namespace Gundomizer
         {
             base.OnPoint(hand);
             if (Owner != null && hand.CurrentInteractable == null && hand.Input.TriggerDown)
-                Owner.Click(Compatible, hand);
+                Activate(hand);
         }
 
         public void OnPointerEnter(PointerEventData eventData) { mouseHover = true; }
@@ -29,16 +44,17 @@ namespace Gundomizer
         private void LateUpdate()
         {
             if (Owner == null) return;
-            bool ready = Owner.CanClick(Compatible);
+            bool ready = Ready == null ? Owner.CanClick(Compatible) : Ready();
             // Native pointables invoke callbacks directly, so readiness is checked again by Click.
             UiButton.interactable = ready;
             if (Background != null)
             {
-                Background.texture = ready ? RainbowTexture : Texture2D.whiteTexture;
+                Background.texture = ready && Rainbow ? RainbowTexture : Texture2D.whiteTexture;
                 Background.uvRect = new Rect(Mathf.Repeat(-Time.unscaledTime * 0.13f, 1f), 0f, 1f, 1f);
                 var color = ready ? new Color(Hovered ? 0.8f : 0.53f, Hovered ? 0.8f : 0.53f, Hovered ? 0.8f : 0.53f)
                     : new Color(0.19f, 0.19f, 0.19f);
                 color.a = 0.95f;
+                if (!Rainbow && ready) color = Hovered ? new Color(0.3f, 0.35f, 0.4f, 1f) : new Color(0.13f, 0.16f, 0.19f, 1f);
                 Background.color = color;
             }
             if (Icon != null) Icon.color = ready ? Color.white : new Color(0.52f, 0.52f, 0.52f);

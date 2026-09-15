@@ -55,6 +55,18 @@ static class Program
         tags.Clear(); tags[1] = new List<string>();
         Check(!new TagSelectionSnapshot<int>(tags).Matches(null),
             "native empty filter groups are preserved rather than silently broadening a query");
+        var ammo = new AmmoSelection();
+        string fmj9 = AmmoSelection.Key(9, 1), fmj45 = AmmoSelection.Key(45, 1), tracer9 = AmmoSelection.Key(9, 2);
+        Check(ammo.Includes(fmj9) && ammo.Includes(tracer9), "ammo variants default to included");
+        ammo.Set(fmj9, false);
+        Check(!ammo.Includes(fmj9) && ammo.Includes(fmj45) && ammo.Includes(tracer9), "ammo exclusions affect only their caliber and variant");
+        int revision = ammo.Revision;
+        ammo.Set(fmj9, false);
+        Check(ammo.Revision == revision, "unchanged ammo choices do not invalidate a roll");
+        ammo.Set(tracer9, false);
+        Check(!ammo.Includes(fmj9) && !ammo.Includes(tracer9) && ammo.Revision != revision, "disabling all variants preserves an empty pool");
+        ammo.Set(fmj9, true);
+        Check(ammo.Includes(fmj9) && !ammo.Includes(tracer9), "re-enabling a variant does not reset other choices");
         var perm = new List<string>(overview);
         SelectionPolicy.Shuffle(perm, new Random(42));
         Check(new HashSet<string>(perm).SetEquals(overview) && perm.Count == overview.Count,

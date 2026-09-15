@@ -26,6 +26,14 @@ public static class RuntimeSuite
 
     public static IEnumerator Run(string directory, Action<string> log)
     {
+        foreach (var pair in AM.STypeDic[FireArmRoundType.a9_19_Parabellum])
+        {
+            var obj = pair.Value.ObjectID;
+            string id = obj == null ? "" : obj.SpawnedFromId;
+            log("AMMO CATALOG " + pair.Key + " name=" + pair.Value.Name + " object=" + (obj == null ? "null" : obj.ItemID)
+                + " spawner=" + id + " registered=" + (!string.IsNullOrEmpty(id) && IM.HasSpawnedID(id))
+                + " exact=" + (!string.IsNullOrEmpty(id) && IM.HasSpawnedID(id) && IM.GetSpawnerID(id).MainObject == obj));
+        }
         // Each run starts from the same native scene, including any authored scene defaults.
         {
             log("Loading WarehouseRange_Rebuilt without VR");
@@ -184,6 +192,9 @@ public static class RuntimeSuite
             Check(!Get<bool>(controller, "busy") && Get<string>(spawner, "m_selectedID") == prior,
                 "empty-pool click keeps selection unchanged", log);
             Screenshot(Get<RectTransform>(controller, "uiRoot").parent as RectTransform, Path.Combine(directory, "empty-tags.png"));
+            var ammoChecks = AmmoChecks(spawner, controller, firearm, config, createdObjects, directory, log);
+            try { while (ammoChecks.MoveNext()) yield return ammoChecks.Current; }
+            finally { (ammoChecks as IDisposable).Dispose(); }
             spawner.BTN_Tag_ClearSelectedTags();
             spawner.BTN_SetPageMode(3);
             for (int i = 0; i < 3; ++i)
@@ -219,6 +230,105 @@ public static class RuntimeSuite
             foreach (var obj in createdObjects) if (obj != null) Object.Destroy(obj);
             if (gun != null) Object.Destroy(gun);
             log("Restored settings and hand state; removed test objects");
+        }
+    }
+
+    private static IEnumerator AmmoChecks(ItemSpawnerV2 spawner, MonoBehaviour controller, FVRPhysicalObject firearm,
+        ConfigEntry<bool> config, List<GameObject> createdObjects, string directory, Action<string> log)
+    {
+        var panel = Get<object>(controller, "ammoPanel");
+        var selectionType = controller.GetType().Assembly.GetType("Gundomizer.AmmoSelection", true);
+        var selection = AccessTools.Field(selectionType, "Shared").GetValue(null);
+        var loading = AccessTools.Field(typeof(AnvilAsset), "m_loadingState");
+        var ammoObjects = AM.STypeDic[FireArmRoundType.a9_19_Parabellum].Values.Select(v => v.ObjectID).ToArray();
+        var callbacks = ammoObjects.Select(o => loading.GetValue(o)).ToArray();
+        Call(panel, "Refresh", firearm, true);
+        Check(ammoObjects.Select((o, i) => loading.GetValue(o) == callbacks[i]).All(v => v), "ammo catalog reads do not start prefab loads", log);
+        var variants = Get<IList>(panel, "variants");
+        Check(variants.Count == ammoObjects.Length, "all native 9 mm variants appear with exact spawner entries", log);
+        var originalChoices = new Dictionary<string, bool>();
+        foreach (var item in variants)
+        {
+            string itemKey = Get<string>(item, "Key");
+            originalChoices.Add(itemKey, (bool)Call(selection, "Includes", itemKey));
+        }
+        var root = Get<RectTransform>(controller, "uiRoot");
+        var popup = Get<RectTransform>(panel, "popup");
+        var roll = Get<MonoBehaviour>(panel, "rollButton");
+        var toggle = Get<MonoBehaviour>(panel, "toggleButton");
+        try
+        {
+            spawner.BTN_SetPageMode(1);
+            spawner.BTN_SimpleMode_SwitchToSimpleMode();
+            yield return new WaitForSecondsRealtime(0.35f);
+            toggle.GetComponent<Button>().onClick.Invoke();
+            yield return null;
+            Check(popup.gameObject.activeInHierarchy, "ammo dropdown opens an anchored popup in classic mode", log);
+            Screenshot(root.parent as RectTransform, Path.Combine(directory, "ammo-classic.png"));
+            Call(panel, "SetAll", false);
+            yield return new WaitForEndOfFrame();
+            Check(!roll.GetComponent<Button>().interactable && toggle.GetComponent<Button>().interactable,
+                "all-off choices disable rolling while keeping choices accessible", log);
+            var variant = variants[0];
+            string key = Get<string>(variant, "Key");
+            ((MonoBehaviour)Get<IList>(panel, "rows")[0]).GetComponent<Button>().onClick.Invoke();
+            Check((bool)Call(selection, "Includes", key), "clicking a variant row enables that variant", log);
+            Call(panel, "Update");
+            var entry = Get<ItemSpawnerID>(variant, "Entry");
+            spawner.BTN_SetPageMode(4);
+            for (int i = 0; i < 2; ++i)
+            {
+                config.Value = i == 1;
+                var before = new HashSet<int>(Object.FindObjectsOfType<FVRPhysicalObject>().Select(o => o.GetInstanceID()));
+                int pad = Get<int>(spawner, "m_curSmallPos");
+                yield return new WaitForSecondsRealtime(0.35f);
+                roll.GetComponent<Button>().onClick.Invoke();
+                float deadline = Time.realtimeSinceStartup + 60;
+                while (Get<bool>(controller, "busy") && Time.realtimeSinceStartup < deadline) yield return null;
+                Check(!Get<bool>(controller, "busy") && Get<string>(spawner, "m_selectedID") == entry.ItemID,
+                    "ammo roll respects the single enabled variant even in the Melee section", log);
+                var added = Object.FindObjectsOfType<FVRPhysicalObject>().Where(o => !before.Contains(o.GetInstanceID())).ToArray();
+                foreach (var obj in added) createdObjects.Add(obj.gameObject);
+                if (i == 0) Check(added.Length == 0 && Get<int>(spawner, "m_curSmallPos") == pad, "ammo selection creates no cartridge and leaves spawn pads unchanged", log);
+                else
+                {
+                    var round = added.Length == 1 ? added[0] as FVRFireArmRound : null;
+                    Check(round != null && round.RoundType == Get<FireArmRoundType>(variant, "Type")
+                        && round.RoundClass == Get<FireArmRoundClass>(variant, "Class"), "ammo instant mode spawns exactly one cartridge with the selected native caliber and class", log);
+                }
+            }
+            spawner.BTN_SetPageMode(1);
+            spawner.BTN_SimpleMode_SwitchToTagSearch();
+            yield return new WaitForSecondsRealtime(0.35f);
+            Screenshot(root.parent as RectTransform, Path.Combine(directory, "ammo-tags.png"));
+            Check(popup.gameObject.activeInHierarchy, "ammo popup also works in tag mode", log);
+            var load = AM.STypeDic[FireArmRoundType.a12g_Shotgun].Values.First(v => v.ObjectID != null).ObjectID.GetGameObjectAsync();
+            float loadDeadline = Time.realtimeSinceStartup + 60;
+            while (load.keepWaiting && Time.realtimeSinceStartup < loadDeadline) yield return null;
+            Check(!load.keepWaiting, "shotgun test cartridge loaded", log);
+            var shell = Object.Instantiate(load.Result, firearm.transform.position, Quaternion.identity);
+            createdObjects.Add(shell);
+            var heldField = AccessTools.Field(typeof(FVRViveHand), "m_currentInteractable");
+            heldField.SetValue(GM.CurrentMovementManager.Hands[0], shell.GetComponent<FVRPhysicalObject>());
+            Call(controller, "RefreshHeldItem", new object[] { null });
+            Check(!popup.gameObject.activeSelf, "changing held objects closes the stale ammo popup", log);
+            toggle.GetComponent<Button>().onClick.Invoke();
+            yield return null;
+            var shotgunVariants = Get<IList>(panel, "variants");
+            Check(shotgunVariants.Count > 7, "shotgun ammo provides a multi-page variant list", log);
+            Get<MonoBehaviour>(panel, "next").GetComponent<Button>().onClick.Invoke();
+            Check(Get<int>(panel, "page") == 1, "ammo popup pagination reaches additional variants", log);
+            Call(panel, "EnabledVariants");
+            Check(Get<int>(panel, "page") == 1, "refreshing the ammo roll pool preserves the popup page", log);
+            Screenshot(root.parent as RectTransform, Path.Combine(directory, "ammo-shotgun-page2.png"));
+            heldField.SetValue(GM.CurrentMovementManager.Hands[0], firearm);
+            Call(controller, "RefreshHeldItem", new object[] { null });
+            Check(Get<int>(panel, "enabledCount") == 1, "9 mm choices survive switching to another caliber and back", log);
+        }
+        finally
+        {
+            foreach (var pair in originalChoices) Call(selection, "Set", pair.Key, pair.Value);
+            Call(panel, "Hide");
         }
     }
 

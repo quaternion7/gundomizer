@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.6 — compatible ammo and variant choices
+
+- Add an ammo-roll button with an adjacent popup toggle in both viewer modes. Use the held object's caliber independently of the browser category or tags.
+- Populate named variants and property descriptions from the native ammo catalog without requesting prefabs. Include firearms, magazines, clips, speedloaders, cartridges, and installed/integrated attachable firearms.
+- Add individual variant toggles, All/None, and pagination. Remember choices per caliber for the game session; disable rolling when all choices are off.
+- Respect Spawn Item Instantly, validate the loaded cartridge's actual caliber/class, and cancel a pending roll when its choices or held target change.
+- Move the native tag pager slightly right to fit the new group at the existing button row; preserve its text, size, and callbacks.
+
 ## 0.1.5 — tag-search support
 
 - Show the existing buttons in the same position in classic and tag-search modes, including grid and text lists.

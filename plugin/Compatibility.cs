@@ -187,7 +187,7 @@ namespace Gundomizer
 
         // Traverse registered attachments as well as transforms: installed adapters do not always
         // parent to their immediate owning rail. Never infer an adapter that is not installed.
-        private static IEnumerable<FVRPhysicalObject> Objects(FVRPhysicalObject root)
+        internal static IEnumerable<FVRPhysicalObject> Objects(FVRPhysicalObject root)
         {
             var queue = new Queue<FVRPhysicalObject>();
             var seen = new HashSet<FVRPhysicalObject>();

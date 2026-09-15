@@ -1,15 +1,16 @@
 # Gundomizer
 
-Gundomizer adds two compact icon buttons with a sliding rainbow gradient to the bottom-left of H3VR's **Item Spawner V2**, in classic and tag-search modes:
+Gundomizer adds compact icon buttons with a sliding rainbow gradient to the bottom-left of H3VR's **Item Spawner V2**, in classic and tag-search modes:
 
 - **Dice (Randomizer)** spawns one random item from the current section, across all pages. At the category overview, it includes all subcategories; inside a subcategory, it stays within that subcategory.
 - **Gun + hand (Compatible)** does the same, filtered by the object in your non-pointing hand. Hold a firearm and browse magazines, clips, speedloaders, or attachments. Installed rail adapters and attachment mounts are included. The button is gray when nothing is held.
+- **Cartridge (Ammo)** rolls one enabled ammo variant for the held object's caliber, independently of the current section or tags. The adjacent **arrow** opens its variant choices.
 
-In tag-search mode, both buttons use the native results matching your selected tags, across all pages and in either grid or list view. Changing filters while an item loads cancels that roll.
+In tag-search mode, the dice and gun/hand buttons use the native results matching your selected tags, across all pages and in either grid or list view. Changing filters while an item loads cancels those rolls.
 
 Hover a button for its tooltip. Items spawn on the spawner's native pads and become the selected entry in the details panel. The buttons spawn **one main object**, without bundled secondary items or the stock random gun's attachment pile. The native Spawn and Random Gun controls retain their original behavior.
 
-**Version 0.1.5 is a local prototype.** This increment adds tag-search support. Ammo toggles, further search optimization, and replacing the interim sight guard are planned in [the completion roadmap](docs/roadmap.md).
+**Version 0.1.6 is a local prototype.** This increment adds compatible ammo and variant choices. Further search optimization and replacing the interim sight guard remain in [the completion roadmap](docs/roadmap.md).
 
 The reported HAM combo scope initialization error is documented in [the incident analysis](docs/incidents/2026-09-15-ham-scope.md). Gundomizer conservatively skips active reflex-sight prefabs missing references used by native `Awake`. The HAM is a registered spawnable item; failure without mods has not been reproduced. Other mods' configuration and native spawner behavior are unchanged.
 
@@ -41,7 +42,7 @@ dotnet run --project .\tests\Gundomizer.Tests.csproj -c Release
 The default deployment profile is **Development**. The deployment script creates the local ZIP, backs up this mod's prior files and the profile registry, installs only Gundomizer, and verifies the installed DLL hash. If r2modman was already displaying the profile, reselect it to refresh the mod list.
 
 Build output: `plugin/bin/Release/net35/quaternion.gundomizer.dll`.
-Local package: `artifacts/quaternion-Gundomizer-0.1.5.zip`.
+Local package: `artifacts/quaternion-Gundomizer-0.1.6.zip`.
 
 Please test category overview versus subcategory rolls, empty hands, magazine fit, an installed Picatinny adapter, occupied attachment mounts, hover tooltips, rapid clicks, and changing hands while an asset loads. See [the prototype plan](docs/extension-plan.md) for the full acceptance checklist.
 
@@ -53,12 +54,20 @@ An opt-in [runtime test harness](docs/runtime-testing.md) can launch the dev pro
 
 In r2modman's Config Editor, open `BepInEx/config/quaternion.gundomizer.cfg`. The plugin creates this file on its first launch.
 
-**General > Spawn Item Instantly** defaults to **true** and applies to both buttons:
+**General > Spawn Item Instantly** defaults to **true** and applies to all three roll buttons:
 
 - **true:** immediately spawn one main item and select its entry, as before.
 - **false:** only select the random entry in the native details panel and history. Use the native **Spawn** button to accept it, or click a randomizer button again to reroll. No object is created and no spawn pad or firearm counter advances during selection.
 
 Both modes keep the same section scope, compatibility checks, and malformed-prefab guard. Each roll uses the setting from when it was clicked. Edit the config while H3VR is closed, then launch the game. Manual spawning uses the native Spawn behavior, including any bundled secondary items.
+
+## Ammo choices
+
+Hold a firearm, magazine, clip, speedloader, or cartridge, then open the arrow beside the cartridge button. Toggle individual named variants, or use **All**, **None**, and the page arrows. All variants start enabled; choices are remembered per caliber across panels for the current game session. Restarting resets them. Disabling every variant disables the ammo roll while leaving its choices accessible.
+
+The popup uses native ammo names and shows native property tags such as incendiary, tracer, and armor penetrating when hovering a row. It reads metadata without loading the cartridge prefabs. Multi-caliber firearms and installed/integrated attachable firearms contribute their supported calibers. Changing held objects closes the popup; changing choices cancels a pending ammo roll. The loaded cartridge's actual caliber and class are checked again before selection/spawning.
+
+Only unlocked variants with an exact native item-spawner entry are listed, so selection mode never silently substitutes another round. Custom ammo missing that registration is currently omitted. The native tag pager is shifted slightly right to leave room for the ammo group without reducing its text or hit targets.
 
 ## Research and development
 

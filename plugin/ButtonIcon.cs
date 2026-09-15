@@ -6,6 +6,8 @@ namespace Gundomizer
     public sealed class ButtonIcon : MaskableGraphic
     {
         internal bool Compatible;
+        internal bool Ammo;
+        internal bool Dropdown;
 
         protected override void OnPopulateMesh(VertexHelper mesh)
         {
@@ -14,7 +16,7 @@ namespace Gundomizer
             float viewWidth = Compatible ? 160f : 100f;
             float scale = Mathf.Min(rect.width / viewWidth, rect.height / 100f);
             var origin = new Vector2(rect.center.x - viewWidth * scale * 0.5f, rect.center.y + 50f * scale);
-            var shapes = Compatible ? IconGeometry.GunAndHand : IconGeometry.Dice;
+            var shapes = Ammo ? IconGeometry.Cartridge : Dropdown ? IconGeometry.Chevron : Compatible ? IconGeometry.GunAndHand : IconGeometry.Dice;
             foreach (var shape in shapes)
             {
                 int start = mesh.currentVertCount;
