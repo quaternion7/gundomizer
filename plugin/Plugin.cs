@@ -7,8 +7,9 @@ using HarmonyLib;
 
 namespace Gundomizer
 {
-    [BepInPlugin("quaternion.gundomizer", "Gundomizer", "0.1.9")]
+    [BepInPlugin("quaternion.gundomizer", "Gundomizer", "0.1.10")]
     [BepInProcess("h3vr.exe")]
+    [BepInDependency("h3vr.otherloader", BepInDependency.DependencyFlags.SoftDependency)]
     public sealed class Plugin : BaseUnityPlugin
     {
         internal static ManualLogSource Log;
@@ -32,14 +33,18 @@ namespace Gundomizer
                     new ConfigDescription("Pause a search after this many seconds. An already-started shared game load continues; clicking again resumes the search.",
                     new AcceptableValueRange<float>(1f, 60f)));
                 SpawnerBridge.Validate();
+                OtherLoaderBridge.Initialize();
                 harmony = new Harmony("quaternion.gundomizer");
                 harmony.Patch(AccessTools.Method(typeof(ItemSpawnerV2), "Start"),
                     postfix: new HarmonyMethod(typeof(Plugin), nameof(AfterStart)));
                 harmony.Patch(AccessTools.Method(typeof(ItemSpawnerV2), "RedrawDetailsCanvas"),
                     postfix: new HarmonyMethod(typeof(Plugin), nameof(AfterDetails)));
-                harmony.Patch(AccessTools.Method(typeof(ItemSpawnerV2), "BTN_Details_Spawn"),
+                if (OtherLoaderBridge.Active)
+                    harmony.Patch(OtherLoaderBridge.SpawnHandler,
+                        prefix: new HarmonyMethod(typeof(Plugin), nameof(BeforeOtherLoaderSpawn)));
+                else harmony.Patch(AccessTools.Method(typeof(ItemSpawnerV2), "BTN_Details_Spawn"),
                     prefix: new HarmonyMethod(typeof(Plugin), nameof(BeforeSelectedSpawn)));
-                Logger.LogInfo("Gundomizer 0.1.9 loaded. Classic and tag viewer randomizer enabled.");
+                Logger.LogInfo("Gundomizer 0.1.10 loaded. Classic and tag viewer randomizer enabled.");
             }
             catch (Exception ex)
             {
@@ -72,6 +77,16 @@ namespace Gundomizer
         {
             var controller = __instance.GetComponent<RandomizerController>();
             return controller == null || !controller.enabled || !controller.SpawnManagedSelection(___m_selectedID);
+        }
+
+        private static bool BeforeOtherLoaderSpawn(ItemSpawnerV2 __0, ref bool __result)
+        {
+            // This HarmonyX build continues running competing prefixes after a false result.
+            // Intercept OtherLoader's handler itself, so a managed click is spawned only once.
+            var controller = __0.GetComponent<RandomizerController>();
+            if (controller == null || !controller.enabled || !controller.SpawnManagedSelection()) return true;
+            __result = false;
+            return false;
         }
 
         private void OnDestroy()

@@ -48,6 +48,7 @@ namespace Gundomizer
         {
             get
             {
+                if (OtherLoaderBridge.Active) return OtherLoaderBridge.Path(spawner);
                 var page = PageMode;
                 var levels = (Dictionary<ItemSpawnerV2.PageMode, ItemSpawnerV2.SimpleDisplayLevel>)Levels.GetValue(spawner);
                 var groups = (Dictionary<ItemSpawnerV2.PageMode, ItemSpawnerCategoryDefinitionsV2.SpawnerPage.SpawnerTagGroup>)Group.GetValue(spawner);
@@ -103,29 +104,30 @@ namespace Gundomizer
             }
             List<string> pageIds;
             if (!ManagerSingleton<IM>.Instance.PageItemLists.TryGetValue(page, out pageIds)) return result;
-            var ids = SelectionPolicy.SectionIds(categoryOverview,
-                pageIds, (List<string>)Working.GetValue(spawner));
+            var ids = OtherLoaderBridge.Active && !tagMode ? OtherLoaderBridge.ClassicIds(spawner)
+                : SelectionPolicy.SectionIds(categoryOverview, pageIds, (List<string>)Working.GetValue(spawner));
+            var seen = new HashSet<string>(StringComparer.Ordinal);
             foreach (var id in ids)
             {
-                if (!IM.HasSpawnedID(id)) continue;
-                var entry = IM.GetSpawnerID(id);
-                if (IsAvailable(entry)) result.Add(entry);
+                var entry = OtherLoaderBridge.Resolve(id);
+                if (IsAvailable(entry) && seen.Add(entry.MainObject.ItemID)) result.Add(entry);
             }
             return result;
         }
 
-        internal static bool IsAvailable(ItemSpawnerID entry) => entry != null && entry.MainObject != null
-            && GM.Rewards != null && GM.Rewards.RewardUnlocks.IsRewardUnlocked(entry);
+        internal static bool IsAvailable(ItemSpawnerID entry) => OtherLoaderBridge.Available(entry);
 
         internal void SelectEntry(ItemSpawnerID entry)
         {
-            Queue.Invoke(spawner, new object[] { entry.ItemID });
-            Select.Invoke(spawner, new object[] { entry.ItemID });
+            string id = OtherLoaderBridge.SelectionId(entry);
+            Queue.Invoke(spawner, new object[] { id });
+            Select.Invoke(spawner, new object[] { id });
             Details.Invoke(spawner, null);
-            managedSelections.Add(entry.ItemID);
+            managedSelections.Add(id);
         }
 
         internal bool IsManagedSelection(string id) => id != null && managedSelections.Contains(id);
+        internal string SelectedId => (string)Field("m_selectedID").GetValue(spawner);
 
         internal UnityEngine.Transform SpawnPoint(ItemSpawnerID entry)
         {

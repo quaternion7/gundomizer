@@ -70,7 +70,7 @@ namespace Gundomizer
         internal void RefreshPreview(string selectedId)
         {
             if (spawner == null || spawner.IM_Detail == null) return;
-            bool selected = !string.IsNullOrEmpty(selectedId) && IM.HasSpawnedID(selectedId);
+            bool selected = OtherLoaderBridge.Resolve(selectedId) != null;
             if (previewFallback == null)
             {
                 if (!selected || spawner.IM_Detail.sprite != null) return;
@@ -208,11 +208,13 @@ namespace Gundomizer
             }
         }
 
+        internal bool SpawnManagedSelection() => SpawnManagedSelection(bridge.SelectedId);
+
         internal bool SpawnManagedSelection(string id)
         {
-            if (!Visible || !bridge.IsManagedSelection(id) || !IM.HasSpawnedID(id)) return false;
+            if (!Visible || !bridge.IsManagedSelection(id)) return false;
             if (busy) return true;
-            var entry = IM.GetSpawnerID(id);
+            var entry = OtherLoaderBridge.Resolve(id);
             if (!SpawnerBridge.IsAvailable(entry)) return false;
             pendingSearch = null;
             busy = true;
@@ -226,7 +228,7 @@ namespace Gundomizer
         {
             // Accepting a roll with native Spawn retains its main + SecondObject behavior.
             // Gather the requested prefabs first, so a timeout cannot leave half a native set.
-            var sources = entry.SecondObject == null ? new[] { entry.MainObject } : new[] { entry.MainObject, entry.SecondObject };
+            var sources = OtherLoaderBridge.SpawnSources(entry);
             var prefabs = new List<GameObject>();
             float deadline = Time.realtimeSinceStartup + Plugin.SearchSeconds.Value;
             foreach (var source in sources)

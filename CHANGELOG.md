@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.10 — OtherLoader integration and modded measurements
+
+- Resolve OtherLoader's browser object IDs to native spawner entries; select using the IDs its details panel expects. Keep native and modded results together and respect OtherLoader's unlock state.
+- Traverse OtherLoader's classic category tree across pages and descendants; changing its current path cancels a pending roll.
+- Route managed native Spawn clicks through OtherLoader's handler, preserving its SpawnWithIDs without duplicate spawning from competing Harmony prefixes. Keep generic initialization cleanup active.
+- Add opt-in measurements of real modded searches, process memory, background indexing, and frame intervals, plus OtherLoader integration checks. Validate the separate serialized-metadata probe against 13 installed mod bundles; it is not shipped in the plugin.
+
 ## 0.1.9 — general initialization-failure cleanup
 
 - Remove the ReflexSightController-specific exclusion. Keep entries selectable, including items with missing preview artwork.

@@ -54,6 +54,13 @@ public static class RuntimeSuite
         Check(spawner != null, "live native ItemSpawnerV2 exists", log);
         var controller = spawner.GetComponents<MonoBehaviour>().FirstOrDefault(c => c.GetType().FullName == "Gundomizer.RandomizerController");
         Check(controller != null && controller.enabled, "Gundomizer attached and initialized", log);
+        if (File.Exists(Path.Combine(directory, "measure-mods.txt")))
+        {
+            var measurements = ModdedMeasurements.Run(spawner, controller, directory, log);
+            try { while (measurements.MoveNext()) yield return measurements.Current; }
+            finally { (measurements as IDisposable).Dispose(); }
+            yield break;
+        }
         var bridge = Get<object>(controller, "bridge");
         var root = Get<RectTransform>(controller, "uiRoot");
         spawner.BTN_SetPageMode(1);

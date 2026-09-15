@@ -3,7 +3,9 @@ param(
     [ValidateSet('Start', 'Run', 'Stop')][string]$Action = 'Start',
     [string]$ProfilePath = "$env:APPDATA\r2modmanPlus-local\H3VR\profiles\Development",
     [string]$SteamPath = 'C:\Program Files (x86)\Steam\steam.exe',
-    [string]$RunDirectory
+    [string]$RunDirectory,
+    [switch]$MeasureMods,
+    [switch]$IntegrationOnly
 )
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
@@ -37,6 +39,8 @@ if ($Action -eq 'Start') {
     @{ Profile = $profile; ProbeConfigExisted = (Test-Path -LiteralPath $probeConfig) } |
         ConvertTo-Json | Set-Content -LiteralPath (Join-Path $RunDirectory 'session.json')
     Build-Suite $RunDirectory
+    if ($MeasureMods -or $IntegrationOnly) { [IO.File]::WriteAllText((Join-Path $RunDirectory 'measure-mods.txt'), 'enabled') }
+    if ($IntegrationOnly) { [IO.File]::WriteAllText((Join-Path $RunDirectory 'integration-only.txt'), 'enabled') }
     Copy-Item -LiteralPath (Join-Path $repo 'tests\runtime\bin\Release\net35\Gundomizer.RuntimeProbe.dll') -Destination $probe
     [IO.File]::WriteAllText($activeFile, $RunDirectory)
     [IO.File]::WriteAllText((Join-Path $RunDirectory 'command.txt'), 'run')
@@ -58,6 +62,12 @@ $game = @(Get-CimInstance Win32_Process -Filter "name = 'h3vr.exe'" | Where-Obje
 if ($Action -eq 'Run') {
     if ($game.Count -ne 1) { throw 'The matching test session is not running.' }
     Build-Suite $RunDirectory
+    $marker = Join-Path $RunDirectory 'measure-mods.txt'
+    if ($MeasureMods -or $IntegrationOnly) { [IO.File]::WriteAllText($marker, 'enabled') }
+    elseif (Test-Path -LiteralPath $marker) { Remove-Item -LiteralPath $marker }
+    $integrationMarker = Join-Path $RunDirectory 'integration-only.txt'
+    if ($IntegrationOnly) { [IO.File]::WriteAllText($integrationMarker, 'enabled') }
+    elseif (Test-Path -LiteralPath $integrationMarker) { Remove-Item -LiteralPath $integrationMarker }
     [IO.File]::WriteAllText((Join-Path $RunDirectory 'command.txt'), 'run')
     Write-Output "Queued updated suite. Results: $RunDirectory"
     return

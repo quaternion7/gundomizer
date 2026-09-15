@@ -3,7 +3,7 @@
     <AssemblyName>quaternion.gundomizer</AssemblyName>
     <RootNamespace>Gundomizer</RootNamespace>
     <AssemblyTitle>Gundomizer</AssemblyTitle>
-    <Version>0.1.9</Version>
+    <Version>0.1.10</Version>
     <Authors>quaternion</Authors>
     <Description>Random and held-item-compatible spawning in Item Spawner V2.</Description>
     <TargetFramework>net35</TargetFramework>
