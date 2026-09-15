@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.4 — compatibility query reuse and timings
+
+- Preserve the user's revised tooltips, selection message, and config description in a committed baseline.
+- Capture the held assembly's mounts, wells, and loader requirements once per roll and reuse them across candidate checks. Rebuild for the final live compatibility check.
+- Retain unknown connector metadata for native validation and keep reverse firearm matches. No startup scan or eager prefab loading is introduced.
+- Log compatible-search outcome, candidate counts, requested/checked prefabs, observed load waits, and total duration to guide the next indexing step.
+- Record the staged completion plan and native ammo, asset-loading, tag-filtering, and presentation findings.
+
 ## 0.1.3 — nearby held-item polling
 
 - Poll held-item context once per second for each visible classic spawner, only within 8 metres measured from the player's VR head to that spawner.

@@ -55,6 +55,39 @@ static class Program
         Check(SelectionPolicy.MagazineFits(7, false, true, 7, false, true, true), "belt box accepted by matching belt well");
         Check(!SelectionPolicy.MagazineFits(7, false, false, 7, false, false, true), "ordinary magazine blocked by current belt");
         Check(SelectionPolicy.MagazineFits(7, false, false, 7, true, true, true), "native secondary and attachable well branch honored");
+        var requirements = new CompatibilityRequirements();
+        Check(!requirements.CouldMatch(CompatibilityKind.Magazine, 0, 0, "mag") &&
+            !requirements.CouldMatch(CompatibilityKind.Clip, 0, 0, "clip"),
+            "missing held wells reject even unknown candidate connector metadata");
+        requirements.MagazineTypes.Add(7);
+        requirements.MagazineTypes.Add(9); // An installed secondary well.
+        Check(requirements.CouldMatch(CompatibilityKind.Magazine, 7, 0, "primary") &&
+            requirements.CouldMatch(CompatibilityKind.Magazine, 9, 0, "secondary") &&
+            !requirements.CouldMatch(CompatibilityKind.Magazine, 8, 0, "wrong"),
+            "metadata shortlist includes primary and secondary connectors without broadening to unrelated magazines");
+        Check(requirements.CouldMatch(CompatibilityKind.Magazine, 0, 0, "mod-without-tag"),
+            "unknown magazine metadata is retained for actual prefab validation");
+        requirements.ClipTypes.Add(4);
+        Check(requirements.CouldMatch(CompatibilityKind.Clip, 0, 4, "clip") &&
+            requirements.CouldMatch(CompatibilityKind.Clip, 0, 0, "unknown") &&
+            !requirements.CouldMatch(CompatibilityKind.Clip, 0, 5, "wrong"),
+            "clip metadata retains compatible and unknown connectors only");
+        requirements.SpeedloaderIds.Add("authored-loader");
+        Check(requirements.CouldMatch(CompatibilityKind.Speedloader, 0, 0, "authored-loader") &&
+            !requirements.CouldMatch(CompatibilityKind.Speedloader, 0, 0, "other-loader") &&
+            !requirements.CouldMatch(CompatibilityKind.Speedloader, 0, 0, null),
+            "speedloader shortlist uses authored IDs rather than guessing by caliber");
+        Check(!requirements.CouldMatch(CompatibilityKind.Attachment, 0, 0, "attachment"),
+            "a target without available mounts avoids loading attachment candidates");
+        requirements.HasMount = true;
+        Check(requirements.CouldMatch(CompatibilityKind.Attachment, 0, 0, "unknown-mount-tag"),
+            "available mounts retain attachments for native connector checks without trusting broad display tags");
+        Check(!requirements.CouldMatch(CompatibilityKind.Firearm, 0, 0, "gun"),
+            "a held firearm does not request unrelated firearm prefab matches");
+        requirements.CanMatchFirearm = true;
+        Check(requirements.CouldMatch(CompatibilityKind.Firearm, 0, 0, "gun") &&
+            !requirements.CouldMatch(CompatibilityKind.Unsupported, 0, 0, "cartridge"),
+            "reverse matching permits firearm candidates while deferred categories stay excluded");
         // Regression fixture: shipped HAMScope4x24/RedDotSight/_Interface has an empty Components
         // list and a null UISpawnPoint. An empty list alone is legal; the missing transform is not.
         Check(SpawnSafetyPolicy.ReflexSightProblem(false, true, false)?.Contains("UISpawnPoint") == true,

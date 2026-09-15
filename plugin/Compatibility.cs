@@ -38,120 +38,133 @@ namespace Gundomizer
                 ? item.ObjectWrapper.DisplayName : item.name.Replace("(Clone)", "").Trim();
         }
 
-        internal static bool CouldMatch(FVRObject candidate)
+        private static CompatibilityKind Kind(FVRObject candidate)
         {
-            if (candidate == null) return false;
+            if (candidate == null) return CompatibilityKind.Unsupported;
             switch (candidate.Category)
             {
-                case FVRObject.ObjectCategory.Firearm:
-                case FVRObject.ObjectCategory.Attachment:
-                case FVRObject.ObjectCategory.Magazine:
-                case FVRObject.ObjectCategory.Clip:
-                case FVRObject.ObjectCategory.SpeedLoader: return true;
-                default: return false; // Bullet selection and unrelated categories are not compatibility claims.
+                case FVRObject.ObjectCategory.Firearm: return CompatibilityKind.Firearm;
+                case FVRObject.ObjectCategory.Attachment: return CompatibilityKind.Attachment;
+                case FVRObject.ObjectCategory.Magazine: return CompatibilityKind.Magazine;
+                case FVRObject.ObjectCategory.Clip: return CompatibilityKind.Clip;
+                case FVRObject.ObjectCategory.SpeedLoader: return CompatibilityKind.Speedloader;
+                default: return CompatibilityKind.Unsupported;
             }
         }
 
-        internal static void Prefilter(List<ItemSpawnerID> candidates, FVRPhysicalObject held)
-        {
-            var magazineTypes = new HashSet<int>();
-            var clipTypes = new HashSet<int>();
-            var loaderIds = new HashSet<string>(StringComparer.Ordinal);
-            bool hasMount = false;
-            foreach (var mount in Mounts(held)) { hasMount = true; break; }
-            foreach (var well in held.GetComponentsInChildren<FVRFireArmReloadTriggerWell>(true))
-            {
-                if (!BelongsTo(well.transform, held)) continue;
-                if (well.UsesTypeOverride) magazineTypes.Add((int)well.TypeOverride);
-                else if (well.IsAttachableWell && well.AFireArm != null) magazineTypes.Add((int)well.AFireArm.MagazineType);
-                else if (well.FireArm != null) magazineTypes.Add((int)well.FireArm.MagazineType);
-            }
-            foreach (var well in held.GetComponentsInChildren<FVRFireArmClipTriggerWell>(true))
-                if (BelongsTo(well.transform, held) && well.FireArm != null) clipTypes.Add((int)well.FireArm.ClipType);
-            foreach (var target in Objects(held))
-                if (target.ObjectWrapper != null && target.ObjectWrapper.CompatibleSpeedLoaders != null)
-                    foreach (var loader in target.ObjectWrapper.CompatibleSpeedLoaders)
-                        if (loader != null) loaderIds.Add(loader.ItemID);
-            bool reverse = held is FVRFireArmMagazine || held is FVRFireArmClip || held is Speedloader
-                || held is FVRFireArmAttachment;
-            for (int i = candidates.Count - 1; i >= 0; --i)
-            {
-                var obj = candidates[i].MainObject;
-                bool possible = CouldMatch(obj);
-                switch (obj.Category)
-                {
-                    case FVRObject.ObjectCategory.Attachment: possible &= hasMount; break;
-                    case FVRObject.ObjectCategory.Magazine:
-                        possible &= magazineTypes.Count > 0 && ((int)obj.MagazineType == 0 || magazineTypes.Contains((int)obj.MagazineType)); break;
-                    case FVRObject.ObjectCategory.Clip:
-                        possible &= clipTypes.Count > 0 && ((int)obj.ClipType == 0 || clipTypes.Contains((int)obj.ClipType)); break;
-                    case FVRObject.ObjectCategory.SpeedLoader: possible &= loaderIds.Contains(obj.ItemID); break;
-                    case FVRObject.ObjectCategory.Firearm: possible &= reverse; break;
-                }
-                if (!possible) candidates.RemoveAt(i);
-            }
-        }
+        internal static Query Capture(FVRPhysicalObject held) => new Query(held);
 
+        // Commit uses a fresh query: a snapshot is never a cached guarantee about changing mounts.
         internal static bool Matches(FVRPhysicalObject held, GameObject candidate)
-        {
-            if (held == null || candidate == null) return false;
-            var item = candidate.GetComponent<FVRPhysicalObject>();
-            if (item == null) return false;
-            if (FitsOnto(item, held)) return true;
-            // A held magazine/clip/attachment can also filter the Firearms section.
-            if (item is FVRFireArm && FitsOnto(held, item)) return true;
-            return false;
-        }
+            => held != null && candidate != null && Capture(held).Matches(candidate);
 
-        private static bool FitsOnto(FVRPhysicalObject candidate, FVRPhysicalObject target)
+        internal sealed class Query
         {
-            var attachment = candidate as FVRFireArmAttachment;
-            if (attachment != null)
+            private readonly FVRPhysicalObject target;
+            private readonly List<FVRPhysicalObject> objects;
+            private readonly List<FVRFireArmAttachmentMount> mounts;
+            private readonly List<FVRFireArmReloadTriggerWell> magazineWells = new List<FVRFireArmReloadTriggerWell>();
+            private readonly List<FVRFireArmClipTriggerWell> clipWells = new List<FVRFireArmClipTriggerWell>();
+            private readonly CompatibilityRequirements requirements = new CompatibilityRequirements();
+
+            internal Query(FVRPhysicalObject held)
             {
-                if (!attachment.CanAttach()) return false;
-                foreach (var mount in Mounts(target))
-                    if (mount.Type == attachment.Type && mount.isMountableOn(attachment)) return true;
+                if (held == null) throw new ArgumentNullException(nameof(held));
+                target = held;
+                // Traverse the held assembly once per roll, not again for every candidate prefab.
+                objects = new List<FVRPhysicalObject>(Objects(held));
+                mounts = new List<FVRFireArmAttachmentMount>(Mounts(held, objects));
+                requirements.HasMount = mounts.Count > 0;
+                foreach (var well in held.GetComponentsInChildren<FVRFireArmReloadTriggerWell>(true))
+                {
+                    if (well == null || !BelongsTo(well.transform, held)) continue;
+                    magazineWells.Add(well);
+                    if (well.UsesTypeOverride) requirements.MagazineTypes.Add((int)well.TypeOverride);
+                    else if (well.IsAttachableWell && well.AFireArm != null) requirements.MagazineTypes.Add((int)well.AFireArm.MagazineType);
+                    else if (well.FireArm != null) requirements.MagazineTypes.Add((int)well.FireArm.MagazineType);
+                }
+                foreach (var well in held.GetComponentsInChildren<FVRFireArmClipTriggerWell>(true))
+                {
+                    if (well == null || !BelongsTo(well.transform, held)) continue;
+                    clipWells.Add(well);
+                    if (well.FireArm != null) requirements.ClipTypes.Add((int)well.FireArm.ClipType);
+                }
+                foreach (var obj in objects)
+                    if (obj.ObjectWrapper != null && obj.ObjectWrapper.CompatibleSpeedLoaders != null)
+                        foreach (var loader in obj.ObjectWrapper.CompatibleSpeedLoaders)
+                            if (loader != null) requirements.SpeedloaderIds.Add(loader.ItemID);
+                requirements.CanMatchFirearm = held is FVRFireArmMagazine || held is FVRFireArmClip
+                    || held is Speedloader || held is FVRFireArmAttachment;
             }
 
-            var magazine = candidate as FVRFireArmMagazine;
-            if (magazine != null)
+            internal void Prefilter(List<ItemSpawnerID> candidates)
             {
-                // Use the same type override, belt-box and secondary/attachable-well rules as
-                // FVRFireArmReloadTriggerMag. An occupied well still accepts a spare after unloading.
-                if (candidate.GetComponentInChildren<FVRFireArmReloadTriggerMag>(true) == null) return false;
-                foreach (var well in target.GetComponentsInChildren<FVRFireArmReloadTriggerWell>(true))
+                for (int i = candidates.Count - 1; i >= 0; --i)
                 {
-                    if (!BelongsTo(well.transform, target)) continue;
-                    var firearm = well.FireArm;
-                    var attachable = well.AFireArm;
-                    if (well.IsAttachableWell ? attachable == null : firearm == null) continue;
-                    var type = well.UsesTypeOverride ? well.TypeOverride
-                        : well.IsAttachableWell ? attachable.MagazineType : firearm.MagazineType;
-                    if (SelectionPolicy.MagazineFits((int)magazine.MagazineType, magazine.IsIntegrated,
-                        magazine.IsBeltBox, (int)type, well.IsAttachableWell || well.UsesSecondaryMagSlots,
-                        well.IsBeltBox, firearm != null && firearm.HasBelt)) return true;
+                    var entry = candidates[i];
+                    var obj = entry == null ? null : entry.MainObject;
+                    if (obj == null || !requirements.CouldMatch(Kind(obj), (int)obj.MagazineType,
+                        (int)obj.ClipType, obj.ItemID)) candidates.RemoveAt(i);
                 }
             }
 
-            var clip = candidate as FVRFireArmClip;
-            if (clip != null)
+            internal bool Matches(GameObject candidate)
             {
-                if (candidate.GetComponentInChildren<FVRFireArmClipTriggerClip>(true) == null) return false;
-                foreach (var well in target.GetComponentsInChildren<FVRFireArmClipTriggerWell>(true))
-                    if (BelongsTo(well.transform, target) && well.FireArm != null
-                        && clip.ClipType != 0 && well.FireArm.ClipType == clip.ClipType) return true;
+                if (target == null || candidate == null) return false;
+                var item = candidate.GetComponent<FVRPhysicalObject>();
+                if (item == null) return false;
+                if (FitsOnto(item)) return true;
+                // Reverse matching must inspect the candidate firearm's own wells and mounts.
+                return requirements.CanMatchFirearm && item is FVRFireArm && Capture(item).FitsOnto(target);
             }
 
-            var loader = candidate as Speedloader;
-            if (loader != null)
+            private bool FitsOnto(FVRPhysicalObject candidate)
             {
-                // Caliber alone permits partial/incorrect cylinder layouts. Require explicit authored
-                // compatibility for speedloaders, including special shotgun/launcher devices.
-                foreach (var obj in Objects(target))
-                    if (Contains(obj.ObjectWrapper == null ? null : obj.ObjectWrapper.CompatibleSpeedLoaders,
-                        candidate.ObjectWrapper) && LoaderRoundMatches(loader, obj)) return true;
+                var attachment = candidate as FVRFireArmAttachment;
+                if (attachment != null)
+                {
+                    if (!attachment.CanAttach()) return false;
+                    foreach (var mount in mounts)
+                        if (mount != null && mount.Type == attachment.Type && mount.isMountableOn(attachment)) return true;
+                }
+
+                var magazine = candidate as FVRFireArmMagazine;
+                if (magazine != null)
+                {
+                    // Native connector/override/belt-box rules; an occupied well permits a spare.
+                    if (candidate.GetComponentInChildren<FVRFireArmReloadTriggerMag>(true) == null) return false;
+                    foreach (var well in magazineWells)
+                    {
+                        if (well == null) continue;
+                        var firearm = well.FireArm;
+                        var attachable = well.AFireArm;
+                        if (well.IsAttachableWell ? attachable == null : firearm == null) continue;
+                        var type = well.UsesTypeOverride ? well.TypeOverride
+                            : well.IsAttachableWell ? attachable.MagazineType : firearm.MagazineType;
+                        if (SelectionPolicy.MagazineFits((int)magazine.MagazineType, magazine.IsIntegrated,
+                            magazine.IsBeltBox, (int)type, well.IsAttachableWell || well.UsesSecondaryMagSlots,
+                            well.IsBeltBox, firearm != null && firearm.HasBelt)) return true;
+                    }
+                }
+
+                var clip = candidate as FVRFireArmClip;
+                if (clip != null)
+                {
+                    if (candidate.GetComponentInChildren<FVRFireArmClipTriggerClip>(true) == null) return false;
+                    foreach (var well in clipWells)
+                        if (well != null && well.FireArm != null && clip.ClipType != 0 && well.FireArm.ClipType == clip.ClipType) return true;
+                }
+
+                var loader = candidate as Speedloader;
+                if (loader != null)
+                {
+                    // Preserve authored speedloader compatibility, including exotic devices.
+                    foreach (var obj in objects)
+                        if (obj != null && Contains(obj.ObjectWrapper == null ? null : obj.ObjectWrapper.CompatibleSpeedLoaders,
+                            candidate.ObjectWrapper) && LoaderRoundMatches(loader, obj)) return true;
+                }
+                return false;
             }
-            return false;
         }
 
         private static bool LoaderRoundMatches(Speedloader loader, FVRPhysicalObject target)
@@ -194,11 +207,11 @@ namespace Gundomizer
             }
         }
 
-        private static IEnumerable<FVRFireArmAttachmentMount> Mounts(FVRPhysicalObject root)
+        private static IEnumerable<FVRFireArmAttachmentMount> Mounts(FVRPhysicalObject root, IEnumerable<FVRPhysicalObject> objects)
         {
             var queue = new Queue<FVRFireArmAttachmentMount>();
             var seen = new HashSet<FVRFireArmAttachmentMount>();
-            foreach (var obj in Objects(root))
+            foreach (var obj in objects)
             {
                 if (obj.AttachmentMounts != null)
                     foreach (var mount in obj.AttachmentMounts) queue.Enqueue(mount);

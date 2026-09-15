@@ -7,7 +7,7 @@ using HarmonyLib;
 
 namespace Gundomizer
 {
-    [BepInPlugin("quaternion.gundomizer", "Gundomizer", "0.1.3")]
+    [BepInPlugin("quaternion.gundomizer", "Gundomizer", "0.1.4")]
     [BepInProcess("h3vr.exe")]
     public sealed class Plugin : BaseUnityPlugin
     {
@@ -21,13 +21,13 @@ namespace Gundomizer
             try
             {
                 SpawnItemInstantly = Config.Bind("General", "Spawn Item Instantly", true,
-                    "Enabled: spawns the item when you click the button." +
+                    "Enabled: spawns the item when you click the button. " +
                     "Disabled: select the random item, use the spawner's Spawn button to spawn it.");
                 SpawnerBridge.Validate();
                 harmony = new Harmony("quaternion.gundomizer");
                 harmony.Patch(AccessTools.Method(typeof(ItemSpawnerV2), "Start"),
                     postfix: new HarmonyMethod(typeof(Plugin), nameof(AfterStart)));
-                Logger.LogInfo("Gundomizer 0.1.3 loaded. Classic viewer randomizer enabled.");
+                Logger.LogInfo("Gundomizer 0.1.4 loaded. Classic viewer randomizer enabled.");
             }
             catch (Exception ex)
             {

@@ -114,7 +114,8 @@ namespace Gundomizer
 
         private IEnumerator GuardedRoll(bool compatible, FVRPhysicalObject held, FVRViveHand hand, bool spawnInstantly)
         {
-            var roll = Roll(compatible, held, hand, spawnInstantly);
+            var metrics = new RollMetrics();
+            var roll = Roll(compatible, held, hand, spawnInstantly, metrics);
             try
             {
                 while (true)
@@ -127,6 +128,7 @@ namespace Gundomizer
                     }
                     catch (Exception ex)
                     {
+                        metrics.Outcome = "failed";
                         Plugin.Log.LogError("Randomizer request failed: " + ex);
                         Message("Could not complete the roll. See the BepInEx log.");
                         break;
@@ -139,16 +141,21 @@ namespace Gundomizer
                 (roll as IDisposable)?.Dispose();
                 busy = false;
                 nextClick = Time.unscaledTime + 0.25f;
+                if (compatible) metrics.Log();
             }
         }
 
-        private IEnumerator Roll(bool compatible, FVRPhysicalObject held, FVRViveHand hand, bool spawnInstantly)
+        private IEnumerator Roll(bool compatible, FVRPhysicalObject held, FVRViveHand hand, bool spawnInstantly,
+            RollMetrics metrics)
         {
             string context = bridge.ContextKey;
             var candidates = bridge.CaptureSection();
+            metrics.SectionCount = candidates.Count;
             // Rule out unrelated feed connectors and unsupported relationships using metadata
             // before loading prefabs. Native component checks remain authoritative after loading.
-            if (compatible) Compatibility.Prefilter(candidates, held);
+            var query = compatible ? Compatibility.Capture(held) : null;
+            if (query != null) query.Prefilter(candidates);
+            metrics.FilteredCount = candidates.Count;
             SelectionPolicy.Shuffle(candidates, random);
             int inspected = 0;
             // The first match in a random permutation is uniform over matching entries. Prefabs
@@ -157,8 +164,8 @@ namespace Gundomizer
             {
                 if (!StillValid(context, compatible, held, hand)) yield break;
                 if (!SpawnerBridge.IsAvailable(entry)) continue;
-                if (compatible && !Compatibility.CouldMatch(entry.MainObject)) continue;
                 AnvilCallback<GameObject> request = null;
+                metrics.BeginRequest();
                 try { request = entry.MainObject.GetGameObjectAsync(); }
                 catch (Exception ex) { LogSkipped(entry, ex); }
                 if (request == null) continue;
@@ -175,16 +182,22 @@ namespace Gundomizer
                         LogSkipped(entry, new TimeoutException("Prefab load exceeded 30 seconds."));
                         failed = true; break;
                     }
-                    if (waiting) yield return null;
+                    if (waiting)
+                    {
+                        metrics.NotePending();
+                        yield return null;
+                    }
                 }
+                metrics.EndRequest();
                 if (failed) continue;
                 GameObject prefab = null;
                 bool match = false;
                 try
                 {
                     prefab = entry.MainObject.GetGameObject();
+                    ++metrics.CheckedPrefabs;
                     match = prefab != null && prefab.GetComponent<FVRPhysicalObject>() != null
-                        && (!compatible || Compatibility.Matches(held, prefab));
+                        && (query == null || query.Matches(prefab));
                     if (match)
                     {
                         string problem = PrefabGuard.Problem(prefab);
@@ -205,6 +218,7 @@ namespace Gundomizer
                     if (!spawnInstantly)
                     {
                         bridge.SelectEntry(entry);
+                        metrics.Outcome = "selected";
                         spawner.Boop(0);
                         Plugin.Log.LogInfo("Selected " + entry.ItemID + (compatible ? " compatible with " + Compatibility.Name(held) : ""));
                         Message("Selected " + entry.DisplayName + ".");
@@ -223,6 +237,7 @@ namespace Gundomizer
                     spawned.SetActive(true);
                     bridge.RecordSpawn(entry);
                     bridge.SelectEntry(entry);
+                    metrics.Outcome = "spawned";
                     spawner.Boop(1);
                     Plugin.Log.LogInfo("Spawned " + entry.ItemID + (compatible ? " compatible with " + Compatibility.Name(held) : ""));
                     Message("Spawned " + entry.DisplayName);
@@ -230,6 +245,7 @@ namespace Gundomizer
                 }
                 if (++inspected % 8 == 0) yield return null;
             }
+            metrics.Outcome = "no matches";
             Message(compatible ? "No compatible items in this section for " + Compatibility.Name(held) + "."
                 : "No spawnable items in this section.");
         }
