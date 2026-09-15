@@ -10,7 +10,7 @@ In tag-search mode, the dice and gun/hand buttons use the native results matchin
 
 Hover a button for its tooltip. Items spawn on the spawner's native pads and become the selected entry in the details panel. The buttons spawn **one main object**, without bundled secondary items or the stock random gun's attachment pile. The native Spawn and Random Gun controls retain their original behavior.
 
-**Version 0.1.7 is a local prototype.** This increment refines the button styling and logo, groups the ammo controls, and supplies a generic preview icon when an item has no artwork. Missing artwork does not prevent native selection, history, or spawning. Further search optimization and replacing the interim sight guard remain in [the completion roadmap](docs/roadmap.md).
+**Version 0.1.8 is a local prototype.** Searches now limit new prefab loads and can resume after pausing. Plain random selection uses existing artwork without loading the item. A small background index reads already-loaded components without requesting assets or retaining their prefabs. See [the completion roadmap](docs/roadmap.md).
 
 The reported HAM combo scope initialization error is documented in [the incident analysis](docs/incidents/2026-09-15-ham-scope.md). Gundomizer conservatively skips active reflex-sight prefabs missing references used by native `Awake`. The HAM is a registered spawnable item; failure without mods has not been reproduced. Other mods' configuration and native spawning behavior are unchanged.
 
@@ -42,13 +42,15 @@ dotnet run --project .\tests\Gundomizer.Tests.csproj -c Release
 The default deployment profile is **Development**. The deployment script creates the local ZIP, backs up this mod's prior files and the profile registry, installs only Gundomizer, and verifies the installed DLL hash. If r2modman was already displaying the profile, reselect it to refresh the mod list.
 
 Build output: `plugin/bin/Release/net35/quaternion.gundomizer.dll`.
-Local package: `artifacts/quaternion-Gundomizer-0.1.7.zip`.
+Local package: `artifacts/quaternion-Gundomizer-0.1.8.zip`.
 
 Please test category overview versus subcategory rolls, empty hands, magazine fit, an installed Picatinny adapter, occupied attachment mounts, hover tooltips, rapid clicks, and changing hands while an asset loads. See [the prototype plan](docs/extension-plan.md) for the full acceptance checklist.
 
 For performance testing, compare the first compatible roll with subsequent rolls in the same section. Each compatible request logs its outcome, section/filtered counts, prefab requests/checks, requests that waited, observed load-wait time, and total time. A cached asset request may complete immediately; these are observed request timings, not a measurement of disk I/O alone. This version does not preload the item catalog or create a startup compatibility matrix.
 
 An opt-in [runtime test harness](docs/runtime-testing.md) can launch the dev profile without VR, exercise the real spawner, simulate held-object state, and capture panel images and timings. Its DLL is excluded from the release package.
+
+For large mod collections, **Performance > New Prefab Loads Per Click** defaults to 8 and **Search Seconds Per Click** to 10 seconds. At either limit the search pauses; click the same button to continue its original shuffled order. Paused searches expire after one minute or restart when their filters, held assembly, ammo choices, or spawn setting change. A pause is not an empty compatibility result. Cancelled native loads can continue in the background; Gundomizer permits only one outstanding load that it initiated. One chosen prefab can still require a large bundle, and Unity's asset-loading work itself is outside this mod's frame budget.
 
 ## Settings
 

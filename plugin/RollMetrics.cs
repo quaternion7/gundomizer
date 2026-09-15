@@ -14,6 +14,9 @@ namespace Gundomizer
         internal int FilteredCount;
         internal int RequestedPrefabs;
         internal int CheckedPrefabs;
+        internal int NewLoads;
+        internal int IndexRejected;
+        internal bool Resumed;
         internal string Outcome = "cancelled";
         internal string Kind = "Compatible";
 
@@ -39,9 +42,9 @@ namespace Gundomizer
             EndRequest(); // Include a load cancelled while its coroutine was suspended.
             Plugin.Log.LogInfo(string.Format(CultureInfo.InvariantCulture,
                 Kind + " search {0}: section={1}, filtered={2}, prefab requests={3}, checked={4}, " +
-                "requests that waited={5}, observed load wait={6:F0}ms, total={7:F0}ms.",
+                "requests that waited={5}, observed load wait={6:F0}ms, total={7:F0}ms, new loads={8}, indexed rejections={9}, resumed={10}.",
                 Outcome, SectionCount, FilteredCount, RequestedPrefabs, CheckedPrefabs,
-                waitedRequests, waitSeconds * 1000f, (Time.realtimeSinceStartup - started) * 1000f));
+                waitedRequests, waitSeconds * 1000f, (Time.realtimeSinceStartup - started) * 1000f, NewLoads, IndexRejected, Resumed));
         }
     }
 }

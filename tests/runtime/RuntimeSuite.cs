@@ -198,6 +198,9 @@ public static class RuntimeSuite
             var previewChecks = PreviewChecks(spawner, controller, bridge, createdObjects, directory, log);
             try { while (previewChecks.MoveNext()) yield return previewChecks.Current; }
             finally { (previewChecks as IDisposable).Dispose(); }
+            var performanceChecks = PerformanceChecks.Run(spawner, controller, bridge, log);
+            try { while (performanceChecks.MoveNext()) yield return performanceChecks.Current; }
+            finally { (performanceChecks as IDisposable).Dispose(); }
             spawner.BTN_Tag_ClearSelectedTags();
             spawner.BTN_SetPageMode(3);
             for (int i = 0; i < 3; ++i)

@@ -33,6 +33,20 @@ namespace Gundomizer
         private string cachedHeldName = "none";
         private readonly System.Random random = new System.Random();
         private readonly HashSet<string> loggedFailures = new HashSet<string>();
+        private PendingSearch pendingSearch;
+        private sealed class PendingSearch
+        {
+            internal List<ItemSpawnerID> Candidates;
+            internal int Next;
+            internal int SectionCount;
+            internal SpawnerBridge.Context Context;
+            internal FVRPhysicalObject Held;
+            internal string Signature;
+            internal string Kind;
+            internal bool SpawnInstantly;
+            internal int AmmoRevision;
+            internal float Expires;
+        }
 
         internal void Initialize(ItemSpawnerV2 owner)
         {
@@ -86,6 +100,8 @@ namespace Gundomizer
                 && (body.Head.position - spawner.transform.position).sqrMagnitude <= HeldItemRangeSquared;
             // No hand/component lookups for distant panels. Measure from the VR head to THIS spawner.
             cachedHeldItem = playerNearby ? Compatibility.HeldItem(pointingHand) : null;
+            if (pendingSearch != null && pendingSearch.Kind != "Random" && pendingSearch.Held != cachedHeldItem)
+                pendingSearch = null;
             cachedHeldName = Compatibility.Name(cachedHeldItem);
             if (ammoPanel != null) ammoPanel.Refresh(cachedHeldItem);
         }
@@ -94,6 +110,8 @@ namespace Gundomizer
         {
             if (randomButton == null || compatibleButton == null || uiRoot == null || spawner == null) return;
             bool visible = Visible;
+            if (pendingSearch != null && (!visible || Time.realtimeSinceStartup > pendingSearch.Expires
+                || (pendingSearch.Context != null && !bridge.MatchesContext(pendingSearch.Context)))) pendingSearch = null;
             if (uiRoot.gameObject.activeSelf != visible) uiRoot.gameObject.SetActive(visible);
             if (!visible)
             {
@@ -107,7 +125,7 @@ namespace Gundomizer
             if (Time.unscaledTime >= nextHeldItemCheck) RefreshHeldItem();
             if (ammoPanel != null) ammoPanel.Update();
             string message = null;
-            if (busy || Time.unscaledTime < statusUntil) message = status;
+            if (busy || pendingSearch != null || Time.unscaledTime < statusUntil) message = status;
             else if (compatibleButton.Hovered)
                 message = "Random COMPATIBLE item of held item [" +
                     (cachedHeldItem == null ? "none" : cachedHeldName) + "] (" + bridge.ScopeDescription + ")";
@@ -155,7 +173,7 @@ namespace Gundomizer
         private IEnumerator GuardedRoll(bool compatible, FVRPhysicalObject held, FVRViveHand hand, bool spawnInstantly,
             List<AmmoCatalog.Variant> ammo = null, int ammoRevision = -1)
         {
-            var metrics = new RollMetrics { Kind = ammo == null ? "Compatible" : "Ammo" };
+            var metrics = new RollMetrics { Kind = ammo != null ? "Ammo" : compatible ? "Compatible" : "Random" };
             var roll = Roll(compatible, held, hand, spawnInstantly, metrics, ammo, ammoRevision);
             try
             {
@@ -182,7 +200,7 @@ namespace Gundomizer
                 (roll as IDisposable)?.Dispose();
                 busy = false;
                 nextClick = Time.unscaledTime + 0.25f;
-                if (compatible) metrics.Log();
+                metrics.Log();
             }
         }
 
@@ -191,40 +209,108 @@ namespace Gundomizer
         {
             var context = ammo == null ? bridge.CaptureContext() : null;
             var variants = new Dictionary<string, AmmoCatalog.Variant>(StringComparer.Ordinal);
-            var candidates = ammo == null ? bridge.CaptureSection() : new List<ItemSpawnerID>();
             if (ammo != null) foreach (var variant in ammo)
-                if (!variants.ContainsKey(variant.Entry.ItemID)) { variants.Add(variant.Entry.ItemID, variant); candidates.Add(variant.Entry); }
-            metrics.SectionCount = candidates.Count;
-            // Rule out unrelated feed connectors and unsupported relationships using metadata
-            // before loading prefabs. Native component checks remain authoritative after loading.
+                if (!variants.ContainsKey(variant.Entry.ItemID)) variants.Add(variant.Entry.ItemID, variant);
             var query = compatible && ammo == null ? Compatibility.Capture(held) : null;
-            if (query != null) query.Prefilter(candidates);
+            var previous = pendingSearch;
+            pendingSearch = null;
+            bool resume = previous != null && previous.Kind == metrics.Kind && previous.Held == held
+                && previous.SpawnInstantly == spawnInstantly && previous.AmmoRevision == ammoRevision
+                && previous.Signature == (query == null ? null : query.Signature)
+                && Time.realtimeSinceStartup <= previous.Expires
+                && (previous.Context == null || bridge.MatchesContext(previous.Context));
+            var candidates = resume ? previous.Candidates : ammo == null ? bridge.CaptureSection() : new List<ItemSpawnerID>();
+            if (!resume && ammo != null) foreach (var variant in variants.Values) candidates.Add(variant.Entry);
+            metrics.SectionCount = resume ? previous.SectionCount : candidates.Count;
+            metrics.Resumed = resume;
+            if (!resume)
+            {
+                // Compact in linear time and yield during large catalog work. Unknown connector
+                // data stays eligible; actual loaded components can reject unrelated connectors.
+                float slice = Time.realtimeSinceStartup;
+                int write = 0;
+                for (int i = 0; i < candidates.Count; ++i)
+                {
+                    var entry = candidates[i];
+                    if (query == null || query.CouldMatch(entry, true)) candidates[write++] = entry;
+                    else if (query.CouldMatch(entry, false)) ++metrics.IndexRejected;
+                    if (i % 64 == 0 && Time.realtimeSinceStartup - slice > 0.0015f)
+                    {
+                        yield return null;
+                        if (!StillValid(context, compatible, held, hand, false, ammoRevision)) yield break;
+                        slice = Time.realtimeSinceStartup;
+                    }
+                }
+                candidates.RemoveRange(write, candidates.Count - write);
+                for (int i = candidates.Count - 1; i > 0; --i)
+                {
+                    int j = random.Next(i + 1);
+                    var swap = candidates[i]; candidates[i] = candidates[j]; candidates[j] = swap;
+                    if (i % 256 == 0 && Time.realtimeSinceStartup - slice > 0.0015f)
+                    { yield return null; slice = Time.realtimeSinceStartup; }
+                }
+            }
             metrics.FilteredCount = candidates.Count;
-            SelectionPolicy.Shuffle(candidates, random);
             int inspected = 0;
+            float inspectionSlice = Time.realtimeSinceStartup;
+            int newLoadLimit = Plugin.MaxNewLoads.Value;
+            float deadline = Time.realtimeSinceStartup + Plugin.SearchSeconds.Value;
             // The first match in a random permutation is uniform over matching entries. Prefabs
             // load lazily, so a click does not force every modded object into memory up front.
-            foreach (var entry in candidates)
+            for (int candidateIndex = resume ? previous.Next : 0; candidateIndex < candidates.Count; ++candidateIndex)
             {
+                if (candidateIndex % 64 == 0 && Time.realtimeSinceStartup - inspectionSlice > 0.0015f)
+                { yield return null; inspectionSlice = Time.realtimeSinceStartup; }
+                var entry = candidates[candidateIndex];
                 if (!StillValid(context, compatible, held, hand, false, ammoRevision)) yield break;
                 if (!SpawnerBridge.IsAvailable(entry)) continue;
+                if (query != null && !query.CouldMatch(entry, true)) { ++metrics.IndexRejected; continue; }
+                // Plain selection needs only spawner metadata. Avoid loading a potentially huge
+                // weapon just to put its existing artwork/name into the details panel.
+                if (!compatible && !spawnInstantly)
+                {
+                    bridge.SelectEntry(entry);
+                    metrics.Outcome = "selected";
+                    spawner.Boop(0);
+                    Message("Selected " + entry.DisplayName + ".");
+                    yield break;
+                }
                 AnvilCallback<GameObject> request = null;
+                bool cold = AssetAccess.Cached(entry.MainObject) == null;
+                if (Time.realtimeSinceStartup >= deadline || (cold && (metrics.NewLoads >= newLoadLimit || AssetAccess.LoadPending)))
+                {
+                    PauseSearch(candidates, candidateIndex, context, held, query, spawnInstantly, ammoRevision, metrics);
+                    yield break;
+                }
                 metrics.BeginRequest();
-                try { request = entry.MainObject.GetGameObjectAsync(); }
-                catch (Exception ex) { LogSkipped(entry, ex); }
+                try
+                {
+                    bool started;
+                    if (!AssetAccess.TryRequest(entry.MainObject, out request, out started))
+                        request = null;
+                    if (started) ++metrics.NewLoads;
+                }
+                catch (Exception ex)
+                {
+                    // A loader can throw after beginning work. End this click rather than
+                    // repeatedly asking other assets through a failing loader.
+                    LogSkipped(entry, ex);
+                    metrics.Outcome = "load failed";
+                    Message("Could not load " + entry.DisplayName + ". See the BepInEx log.");
+                    yield break;
+                }
                 if (request == null) continue;
                 bool waiting = true;
                 bool failed = false;
-                float deadline = Time.realtimeSinceStartup + 30f;
                 while (waiting)
                 {
                     if (!StillValid(context, compatible, held, hand, false, ammoRevision)) yield break;
                     try { waiting = request.keepWaiting; }
                     catch (Exception ex) { LogSkipped(entry, ex); failed = true; break; }
-                    if (Time.realtimeSinceStartup > deadline)
+                    if (waiting && Time.realtimeSinceStartup >= deadline)
                     {
-                        LogSkipped(entry, new TimeoutException("Prefab load exceeded 30 seconds."));
-                        failed = true; break;
+                        PauseSearch(candidates, candidateIndex, context, held, query, spawnInstantly, ammoRevision, metrics);
+                        yield break;
                     }
                     if (waiting)
                     {
@@ -238,7 +324,8 @@ namespace Gundomizer
                 bool match = false;
                 try
                 {
-                    prefab = entry.MainObject.GetGameObject();
+                    prefab = request.Result; // The completed request, never a second synchronous lookup.
+                    ConnectorIndex.Observe(entry.MainObject, prefab);
                     ++metrics.CheckedPrefabs;
                     match = prefab != null && prefab.GetComponent<FVRPhysicalObject>() != null
                         && (ammo != null ? AmmoCatalog.Matches(held, prefab, variants[entry.ItemID]) : query == null || query.Matches(prefab));
@@ -298,6 +385,17 @@ namespace Gundomizer
             string scope = bridge.IsTagMode ? "matching these tags" : "in this section";
             Message(compatible ? "No compatible items " + scope + " for " + Compatibility.Name(held) + "."
                 : "No spawnable items " + scope + ".");
+        }
+
+        private void PauseSearch(List<ItemSpawnerID> candidates, int next, SpawnerBridge.Context context,
+            FVRPhysicalObject held, Compatibility.Query query, bool spawnInstantly, int ammoRevision, RollMetrics metrics)
+        {
+            pendingSearch = new PendingSearch { Candidates = candidates, Next = next, Context = context,
+                Held = held, Signature = query == null ? null : query.Signature, Kind = metrics.Kind,
+                SpawnInstantly = spawnInstantly, AmmoRevision = ammoRevision, SectionCount = metrics.SectionCount,
+                Expires = Time.realtimeSinceStartup + 60f };
+            metrics.Outcome = "paused";
+            Message("Search paused. Click the same button to continue, or narrow the filters.");
         }
 
         private bool StillValid(SpawnerBridge.Context context, bool compatible, FVRPhysicalObject held, FVRViveHand hand,
@@ -496,6 +594,7 @@ namespace Gundomizer
 
         private void DestroyUi()
         {
+            pendingSearch = null;
             if (previewFallback != null) Object.Destroy(previewFallback.gameObject);
             foreach (var pager in pagerOffsets) if (pager.Key != null) pager.Key.localPosition -= pager.Value;
             pagerOffsets.Clear();

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.8 — bounded searches and loaded-connector indexing
+
+- Reuse the native filtered result snapshot instead of repeating filtering and UI redraws. Slice catalog preparation across frames and compact candidate lists in linear time.
+- Index already-loaded components in short background slices, with at most 16,384 weak records and no eager prefab requests. Read current connector fields and invalidate records when native load callbacks change; unknown entries retain native validation.
+- Default to 8 new prefab loads and 10 seconds per click. Pause and resume the same shuffled order; keep one shared outstanding Gundomizer load across cancelled requests and panels.
+- Make plain random selection metadata-only and consume completed asynchronous requests directly. Log new loads, indexed rejections, and resumptions.
+- Validate budget exhaustion/resume, cancellation backpressure, zero-load background scanning, and native result equivalence in the running game.
+
 ## 0.1.7 — button polish and missing previews
 
 - Round the rainbow surfaces and add subtle vertical shading and edge bevels, preserving the sliding gradient and full-size pointing targets.

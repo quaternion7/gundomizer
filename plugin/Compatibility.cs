@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
 using FistVR;
 using UnityEngine;
 
@@ -66,6 +67,8 @@ namespace Gundomizer
             private readonly List<FVRFireArmReloadTriggerWell> magazineWells = new List<FVRFireArmReloadTriggerWell>();
             private readonly List<FVRFireArmClipTriggerWell> clipWells = new List<FVRFireArmClipTriggerWell>();
             private readonly CompatibilityRequirements requirements = new CompatibilityRequirements();
+            private readonly HashSet<int> mountTypes = new HashSet<int>();
+            internal readonly string Signature;
 
             internal Query(FVRPhysicalObject held)
             {
@@ -95,17 +98,40 @@ namespace Gundomizer
                             if (loader != null) requirements.SpeedloaderIds.Add(loader.ItemID);
                 requirements.CanMatchFirearm = held is FVRFireArmMagazine || held is FVRFireArmClip
                     || held is Speedloader || held is FVRFireArmAttachment;
+                var signature = new StringBuilder();
+                foreach (var obj in objects) signature.Append(obj.GetInstanceID()).Append(',');
+                foreach (var mount in mounts)
+                {
+                    mountTypes.Add((int)mount.Type);
+                    signature.Append('|').Append(mount.GetInstanceID()).Append(':').Append((int)mount.Type)
+                        .Append(':').Append(mount.AttachmentsList == null ? -1 : mount.AttachmentsList.Count);
+                }
+                foreach (var type in requirements.MagazineTypes) signature.Append("m").Append(type);
+                foreach (var type in requirements.ClipTypes) signature.Append("c").Append(type);
+                foreach (var id in requirements.SpeedloaderIds) signature.Append("s").Append(id).Append(';');
+                Signature = signature.ToString();
             }
 
             internal void Prefilter(List<ItemSpawnerID> candidates)
             {
-                for (int i = candidates.Count - 1; i >= 0; --i)
-                {
-                    var entry = candidates[i];
-                    var obj = entry == null ? null : entry.MainObject;
-                    if (obj == null || !requirements.CouldMatch(Kind(obj), (int)obj.MagazineType,
-                        (int)obj.ClipType, obj.ItemID)) candidates.RemoveAt(i);
-                }
+                int write = 0;
+                for (int i = 0; i < candidates.Count; ++i)
+                    if (CouldMatch(candidates[i], true)) candidates[write++] = candidates[i];
+                candidates.RemoveRange(write, candidates.Count - write);
+            }
+
+            internal bool CouldMatch(ItemSpawnerID entry, bool useIndex)
+            {
+                var obj = entry == null ? null : entry.MainObject;
+                if (obj == null) return false;
+                var indexed = useIndex ? ConnectorIndex.Find(obj) : null;
+                var attachment = indexed as FVRFireArmAttachment;
+                if (attachment != null) return mountTypes.Contains((int)attachment.Type);
+                var magazine = indexed as FVRFireArmMagazine;
+                if (magazine != null) return !magazine.IsIntegrated && requirements.MagazineTypes.Contains((int)magazine.MagazineType);
+                var clip = indexed as FVRFireArmClip;
+                if (clip != null) return requirements.ClipTypes.Contains((int)clip.ClipType);
+                return requirements.CouldMatch(Kind(obj), (int)obj.MagazineType, (int)obj.ClipType, obj.ItemID);
             }
 
             internal bool Matches(GameObject candidate)

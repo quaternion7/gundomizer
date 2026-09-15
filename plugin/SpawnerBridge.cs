@@ -15,8 +15,6 @@ namespace Gundomizer
         private static readonly FieldInfo SelectedTags = Field("m_selectedTags");
         private static readonly FieldInfo Working = Field("WorkingItemIDs");
         private static readonly FieldInfo SmallPosition = Field("m_curSmallPos");
-        private static readonly MethodInfo Redraw = Method("RedrawSimpleCanvas");
-        private static readonly MethodInfo RedrawTagList = Method("RedrawListCanvas");
         private static readonly MethodInfo Queue = Method("AddToSelectionQueue");
         private static readonly MethodInfo Select = Method("SetSelectedID");
         private static readonly MethodInfo Details = Method("RedrawDetailsCanvas");
@@ -91,10 +89,10 @@ namespace Gundomizer
         {
             var result = new List<ItemSpawnerID>();
             if (!IsBrowsingSection) return result;
-            // Both redraw paths compute the complete result before pagination. Only the classic
-            // category overview leaves WorkingItemIDs stale and needs the full page registry.
+            // Native filter/page callbacks already compute the complete result before pagination.
+            // Reuse it without repeating native filtering, sorting and UI redraws on every roll.
+            // The classic overview uses the page registry because WorkingItemIDs is stale there.
             bool tagMode = IsTagMode;
-            (tagMode ? RedrawTagList : Redraw).Invoke(spawner, null);
             var page = PageMode;
             bool categoryOverview = false;
             if (!tagMode)
