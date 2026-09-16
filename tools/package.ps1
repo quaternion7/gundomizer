@@ -23,5 +23,7 @@ foreach ($file in @('manifest.json','README.md','CHANGELOG.md','icon.png')) {
     Copy-Item -LiteralPath (Join-Path $repoRoot $file) -Destination $stage
 }
 Copy-Item -LiteralPath $dll -Destination $stage
+Copy-Item -LiteralPath (Join-Path (Split-Path $dll) 'AssetsTools.NET.dll') -Destination $stage
+Copy-Item -LiteralPath (Join-Path $repoRoot 'THIRD-PARTY-NOTICES.md') -Destination $stage
 Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zip -Force
 Write-Host "Package: $zip"

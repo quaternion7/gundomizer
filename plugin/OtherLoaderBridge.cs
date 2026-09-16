@@ -16,6 +16,7 @@ namespace Gundomizer
         private static Type dataType;
         private static FieldInfo entries, paths, legacyIds, unlocks, currentPath, nodeEntry, children, visible, objectId, spawnWith;
         private static MethodInfo isUnlocked;
+        private static FieldInfo bundles;
         internal static bool Active => loader != null;
         internal static MethodInfo SpawnHandler { get; private set; }
 
@@ -37,11 +38,17 @@ namespace Gundomizer
             SpawnHandler = AccessTools.Method(assembly.GetType("OtherLoader.Patches.ItemSpawningPatches", true), "SpawnItemDetails")
                 ?? throw new MissingMethodException("OtherLoader.SpawnItemDetails");
             loader = type;
+            bundles = AccessTools.Field(type, "ManagedBundles");
             Plugin.Log.LogInfo("Using OtherLoader's browser IDs, category tree and unlock state.");
         }
 
         private static FieldInfo Required(Type type, string name) => AccessTools.Field(type, name) ?? throw new MissingFieldException(type.FullName, name);
         private static IDictionary Entries => (IDictionary)entries.GetValue(null);
+        internal static string BundlePath(string bundle)
+        {
+            var map = bundles == null ? null : bundles.GetValue(null) as IDictionary;
+            return map != null && map.Contains(bundle) ? map[bundle] as string : null;
+        }
         internal static string Path(ItemSpawnerV2 spawner)
         {
             if (!Active) return null;

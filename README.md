@@ -10,7 +10,7 @@ In tag-search mode, the dice and gun/hand buttons use the native results matchin
 
 Hover a button for its tooltip. Items spawn on the spawner's native pads and become the selected entry in the details panel. The buttons spawn **one main object**, without bundled secondary items or the stock random gun's attachment pile. Accepting a selection with native **Spawn** includes any bundled secondary item.
 
-**Version 0.1.10 is a local prototype.** Searches limit new prefab loads and can resume after pausing. Plain random selection uses existing artwork without loading the item. A small background index reads already-loaded components without requesting assets or retaining their prefabs. See [the completion roadmap](docs/roadmap.md).
+**Version 0.1.11 is a local prototype.** Searches limit new prefab loads and can resume after pausing. Plain random selection uses existing artwork without loading the item. A small background index reads already-loaded components without requesting assets or retaining their prefabs. See [the completion roadmap](docs/roadmap.md).
 
 When OtherLoader is installed, Gundomizer uses its object IDs, classic category tree, unlock state, and bundled spawn list. This keeps native and modded items in the same browser pool. The optional integration was tested with OtherLoader 1.3.7, Modul PM, Modul XM8, G36 Extras, and FN F2000; see [the measurements and remaining loading costs](docs/modded-profile-measurements.md).
 
@@ -44,7 +44,7 @@ dotnet run --project .\tests\Gundomizer.Tests.csproj -c Release
 The default deployment profile is **Development**. The deployment script creates the local ZIP, backs up this mod's prior files and the profile registry, installs only Gundomizer, and verifies the installed DLL hash. If r2modman was already displaying the profile, reselect it to refresh the mod list.
 
 Build output: `plugin/bin/Release/net35/quaternion.gundomizer.dll`.
-Local package: `artifacts/quaternion-Gundomizer-0.1.10.zip`.
+Local package: `artifacts/quaternion-Gundomizer-0.1.11.zip`.
 
 Please test category overview versus subcategory rolls, empty hands, magazine fit, an installed Picatinny adapter, occupied attachment mounts, hover tooltips, rapid clicks, and changing hands while an asset loads. See [the prototype plan](docs/extension-plan.md) for the full acceptance checklist.
 

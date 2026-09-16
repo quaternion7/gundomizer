@@ -131,6 +131,14 @@ namespace Gundomizer
                 if (magazine != null) return !magazine.IsIntegrated && requirements.MagazineTypes.Contains((int)magazine.MagazineType);
                 var clip = indexed as FVRFireArmClip;
                 if (clip != null) return requirements.ClipTypes.Contains((int)clip.ClipType);
+                var persisted = useIndex && indexed == null ? PersistentConnectorIndex.Find(obj) : null;
+                if (persisted != null)
+                {
+                    if (persisted.Kind == Indexing.ConnectorKind.Attachment) return mountTypes.Contains(persisted.Connector);
+                    if (persisted.Kind == Indexing.ConnectorKind.Magazine)
+                        return !persisted.Integrated && requirements.MagazineTypes.Contains(persisted.Connector);
+                    if (persisted.Kind == Indexing.ConnectorKind.Clip) return requirements.ClipTypes.Contains(persisted.Connector);
+                }
                 return requirements.CouldMatch(Kind(obj), (int)obj.MagazineType, (int)obj.ClipType, obj.ItemID);
             }
 

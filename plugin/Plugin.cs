@@ -7,7 +7,7 @@ using HarmonyLib;
 
 namespace Gundomizer
 {
-    [BepInPlugin("quaternion.gundomizer", "Gundomizer", "0.1.10")]
+    [BepInPlugin("quaternion.gundomizer", "Gundomizer", "0.1.11")]
     [BepInProcess("h3vr.exe")]
     [BepInDependency("h3vr.otherloader", BepInDependency.DependencyFlags.SoftDependency)]
     public sealed class Plugin : BaseUnityPlugin
@@ -16,6 +16,7 @@ namespace Gundomizer
         internal static ConfigEntry<bool> SpawnItemInstantly;
         internal static ConfigEntry<int> MaxNewLoads;
         internal static ConfigEntry<float> SearchSeconds;
+        internal static ConfigEntry<bool> PersistentIndex;
         private Harmony harmony;
 
         private void Awake()
@@ -32,6 +33,9 @@ namespace Gundomizer
                 SearchSeconds = Config.Bind("Performance", "Search Seconds Per Click", 10f,
                     new ConfigDescription("Pause a search after this many seconds. An already-started shared game load continues; clicking again resumes the search.",
                     new AcceptableValueRange<float>(1f, 60f)));
+                PersistentIndex = Config.Bind("Performance", "Persistent Connector Index", true,
+                    "Read and cache prefab connector metadata slowly in the background, without loading Unity assets. " +
+                    "Only changed packages/bundles are rebuilt. Unindexed items keep the normal live checks. Restart the game after changing this setting.");
                 SpawnerBridge.Validate();
                 OtherLoaderBridge.Initialize();
                 harmony = new Harmony("quaternion.gundomizer");
@@ -44,7 +48,10 @@ namespace Gundomizer
                         prefix: new HarmonyMethod(typeof(Plugin), nameof(BeforeOtherLoaderSpawn)));
                 else harmony.Patch(AccessTools.Method(typeof(ItemSpawnerV2), "BTN_Details_Spawn"),
                     prefix: new HarmonyMethod(typeof(Plugin), nameof(BeforeSelectedSpawn)));
-                Logger.LogInfo("Gundomizer 0.1.10 loaded. Classic and tag viewer randomizer enabled.");
+                Logger.LogInfo("Gundomizer 0.1.11 loaded. Classic and tag viewer randomizer enabled.");
+                ConnectorIndex.Start(this);
+                try { PersistentConnectorIndex.Start(this); }
+                catch (Exception ex) { Logger.LogWarning("Persistent indexing unavailable; live search remains enabled: " + ex); }
             }
             catch (Exception ex)
             {
@@ -91,6 +98,7 @@ namespace Gundomizer
 
         private void OnDestroy()
         {
+            PersistentConnectorIndex.Stop();
             if (harmony != null) harmony.UnpatchSelf();
         }
     }

@@ -5,7 +5,8 @@ param(
     [string]$SteamPath = 'C:\Program Files (x86)\Steam\steam.exe',
     [string]$RunDirectory,
     [switch]$MeasureMods,
-    [switch]$IntegrationOnly
+    [switch]$IntegrationOnly,
+    [switch]$IndexChecks
 )
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
@@ -41,6 +42,7 @@ if ($Action -eq 'Start') {
     Build-Suite $RunDirectory
     if ($MeasureMods -or $IntegrationOnly) { [IO.File]::WriteAllText((Join-Path $RunDirectory 'measure-mods.txt'), 'enabled') }
     if ($IntegrationOnly) { [IO.File]::WriteAllText((Join-Path $RunDirectory 'integration-only.txt'), 'enabled') }
+    if ($IndexChecks) { [IO.File]::WriteAllText((Join-Path $RunDirectory 'index-checks.txt'), 'enabled') }
     Copy-Item -LiteralPath (Join-Path $repo 'tests\runtime\bin\Release\net35\Gundomizer.RuntimeProbe.dll') -Destination $probe
     [IO.File]::WriteAllText($activeFile, $RunDirectory)
     [IO.File]::WriteAllText((Join-Path $RunDirectory 'command.txt'), 'run')
@@ -68,6 +70,9 @@ if ($Action -eq 'Run') {
     $integrationMarker = Join-Path $RunDirectory 'integration-only.txt'
     if ($IntegrationOnly) { [IO.File]::WriteAllText($integrationMarker, 'enabled') }
     elseif (Test-Path -LiteralPath $integrationMarker) { Remove-Item -LiteralPath $integrationMarker }
+    $indexMarker = Join-Path $RunDirectory 'index-checks.txt'
+    if ($IndexChecks) { [IO.File]::WriteAllText($indexMarker, 'enabled') }
+    elseif (Test-Path -LiteralPath $indexMarker) { Remove-Item -LiteralPath $indexMarker }
     [IO.File]::WriteAllText((Join-Path $RunDirectory 'command.txt'), 'run')
     Write-Output "Queued updated suite. Results: $RunDirectory"
     return

@@ -31,6 +31,7 @@ namespace Gundomizer
             int key = source.GetInstanceID();
             var component = prefab.GetComponent<FVRPhysicalObject>();
             if (component == null) return;
+            PersistentConnectorIndex.Observe(source, component);
             Record record;
             if (records.TryGetValue(key, out record))
             {
@@ -47,6 +48,9 @@ namespace Gundomizer
         internal static FVRPhysicalObject Find(FVRObject source)
         {
             if (source == null) return null;
+            // Live fields always outrank disk metadata, including prefabs loaded since the sweep.
+            var loaded = AssetAccess.Peek(source);
+            if (loaded != null) Observe(source, loaded);
             Record record;
             if (!records.TryGetValue(source.GetInstanceID(), out record) || record.Source.Target as FVRObject != source
                 || record.Callback.Target != AssetAccess.Cached(source)) return null;
@@ -67,7 +71,7 @@ namespace Gundomizer
             {
                 while (true)
                 {
-                    var catalog = IM.OD;
+                    var catalog = ManagerSingleton<IM>.Instance == null ? null : IM.OD;
                     if (catalog != null && !GM.IsAsyncLoading)
                     {
                         // Enumerate in short main-thread slices. Mod registration can invalidate

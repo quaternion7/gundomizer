@@ -24,7 +24,7 @@ try {
     }
     $checked = 0
     foreach ($member in $module.GetMemberReferences()) {
-        if ($member.DeclaringType.Scope.Name -notin @('Assembly-CSharp','UnityEngine','UnityEngine.UI','0Harmony','BepInEx')) { continue }
+        if ($member.DeclaringType.Scope.Name -notin @('Assembly-CSharp','UnityEngine','UnityEngine.UI','0Harmony','BepInEx','mscorlib','System','System.Core')) { continue }
         if ($null -eq $member.Resolve()) { throw "Unresolved runtime member: $member" }
         $checked++
     }

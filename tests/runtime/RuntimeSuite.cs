@@ -54,6 +54,13 @@ public static class RuntimeSuite
         Check(spawner != null, "live native ItemSpawnerV2 exists", log);
         var controller = spawner.GetComponents<MonoBehaviour>().FirstOrDefault(c => c.GetType().FullName == "Gundomizer.RandomizerController");
         Check(controller != null && controller.enabled, "Gundomizer attached and initialized", log);
+        if (File.Exists(Path.Combine(directory, "index-checks.txt")))
+        {
+            var checks = IndexChecks.Run(controller, directory, log);
+            try { while (checks.MoveNext()) yield return checks.Current; }
+            finally { (checks as IDisposable).Dispose(); }
+            if (!File.Exists(Path.Combine(directory, "measure-mods.txt"))) yield break;
+        }
         if (File.Exists(Path.Combine(directory, "measure-mods.txt")))
         {
             var measurements = ModdedMeasurements.Run(spawner, controller, directory, log);
