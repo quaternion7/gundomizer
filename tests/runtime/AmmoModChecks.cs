@@ -30,11 +30,15 @@ public static class AmmoModChecks
         // A3A/OtherLoader may still be registering metadata after the native scene is ready.
         var assembly = BepInEx.Bootstrap.Chainloader.PluginInfos["h3vr.otherloader"].Instance.GetType().Assembly;
         var status = assembly.GetType("OtherLoader.LoaderStatus");
+        var activeLoaders = AccessTools.Property(status, "NumActiveLoaders");
+        var progress = AccessTools.Method(status, "GetLoaderProgress");
+        var lastEvent = AccessTools.Field(status, "LastLoadEventTime");
+        bool patched = assembly.GetType("OtherLoader.ItemSpawner.CustomCategories.CustomCategoriesController") != null;
         float deadline = Time.realtimeSinceStartup + 180;
         yield return new WaitForSecondsRealtime(3);
-        while (Time.realtimeSinceStartup < deadline && ((int)AccessTools.Property(status, "NumActiveLoaders").GetValue(null, null) != 0
-            || (float)AccessTools.Method(status, "GetLoaderProgress").Invoke(null, null) < 1f
-            || Time.time - (float)AccessTools.Field(status, "LastLoadEventTime").GetValue(null) < 3f)) yield return null;
+        while (Time.realtimeSinceStartup < deadline && ((activeLoaders != null && (int)activeLoaders.GetValue(null, null) != 0)
+            || (float)progress.Invoke(null, null) < 1f
+            || (patched ? Time.realtimeSinceStartup : Time.time) - (float)lastEvent.GetValue(null) < 3f)) yield return null;
         Check(Time.realtimeSinceStartup < deadline, "OtherLoader startup registration finished", log);
     }
 
@@ -87,9 +91,10 @@ public static class AmmoModChecks
                     var resolved = (ItemSpawnerID)AccessTools.Method(adapter, "Resolve").Invoke(null, new object[] { round.Data.ObjectID.ItemID });
                     var loader = BepInEx.Bootstrap.Chainloader.PluginInfos["h3vr.otherloader"].Instance.GetType();
                     var modern = (IDictionary)AccessTools.Field(loader, "SpawnerEntriesByID").GetValue(null);
-                    var legacy = (IDictionary)AccessTools.Field(loader, "SpawnerIDsByMainObject").GetValue(null);
+                    var legacyField = AccessTools.Field(loader, "SpawnerIDsByMainObject");
+                    var legacy = legacyField == null ? null : (IDictionary)legacyField.GetValue(null);
                     log("AMMO RESOLVE " + round.Data.ObjectID.ItemID + " native=" + IM.HasSpawnedID(round.Data.ObjectID.SpawnedFromId)
-                        + " modern=" + modern.Contains(round.Data.ObjectID.ItemID) + " legacy=" + legacy.Contains(round.Data.ObjectID.ItemID)
+                        + " modern=" + modern.Contains(round.Data.ObjectID.ItemID) + " legacy=" + (legacy != null && legacy.Contains(round.Data.ObjectID.ItemID))
                         + " resolved=" + (resolved == null ? "null" : resolved.ItemID + "/" + resolved.MainObject.ItemID)
                         + " available=" + AccessTools.Method(adapter, "Available").Invoke(null, new object[] { resolved }));
                     string row = round.Pack + "\t" + round.Type + "\t" + (int)round.Class + "\t" + round.Data.Name + "\t"

@@ -11,6 +11,7 @@
     <Compile Include="SafetyChecks.cs" />
     <Compile Include="ModdedMeasurements.cs" />
     <Compile Include="OtherLoaderChecks.cs" />
+    <Compile Include="PatchedOtherLoaderChecks.cs" />
     <Compile Include="IndexChecks.cs" />
     <Compile Include="AmmoModChecks.cs" />
     <Compile Include="AmmoFillChecks.cs" />

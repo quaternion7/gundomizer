@@ -11,7 +11,8 @@ param(
     [switch]$AmmoModChecks,
     [switch]$AmmoFillChecks,
     [switch]$ReadmePreview,
-    [switch]$SearchChecks
+    [switch]$SearchChecks,
+    [switch]$PatchedLoaderChecks
 )
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
@@ -47,6 +48,7 @@ if ($Action -eq 'Start') {
     @{ Profile = $profile; ProbeConfigExisted = (Test-Path -LiteralPath $probeConfig) } |
         ConvertTo-Json | Set-Content -LiteralPath (Join-Path $RunDirectory 'session.json')
     Build-Suite $RunDirectory
+    if ($PatchedLoaderChecks) { [IO.File]::WriteAllText((Join-Path $RunDirectory 'patched-loader-checks.txt'), 'enabled') }
     if ($AmmoModChecks) { [IO.File]::WriteAllText((Join-Path $RunDirectory 'ammo-mod-checks.txt'), 'enabled') }
     if ($AmmoFillChecks) { [IO.File]::WriteAllText((Join-Path $RunDirectory 'ammo-fill-checks.txt'), 'enabled') }
     if ($ReadmePreview) { [IO.File]::WriteAllText((Join-Path $RunDirectory 'readme-preview.txt'), 'enabled') }
@@ -76,6 +78,9 @@ $game = @(Get-CimInstance Win32_Process -Filter "name = 'h3vr.exe'" | Where-Obje
 if ($Action -eq 'Run') {
     if ($game.Count -ne 1) { throw 'The matching test session is not running.' }
     Build-Suite $RunDirectory
+    $patchedMarker = Join-Path $RunDirectory 'patched-loader-checks.txt'
+    if ($PatchedLoaderChecks) { [IO.File]::WriteAllText($patchedMarker, 'enabled') }
+    elseif (Test-Path -LiteralPath $patchedMarker) { Remove-Item -LiteralPath $patchedMarker }
     $ammoMarker = Join-Path $RunDirectory 'ammo-mod-checks.txt'
     $fillMarker = Join-Path $RunDirectory 'ammo-fill-checks.txt'
     $previewMarker = Join-Path $RunDirectory 'readme-preview.txt'

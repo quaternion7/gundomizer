@@ -48,7 +48,7 @@ namespace Gundomizer
         {
             get
             {
-                if (OtherLoaderBridge.Active) return OtherLoaderBridge.Path(spawner);
+                if (OtherLoaderBridge.UsesClassicTree(spawner)) return OtherLoaderBridge.Path(spawner);
                 var page = PageMode;
                 var levels = (Dictionary<ItemSpawnerV2.PageMode, ItemSpawnerV2.SimpleDisplayLevel>)Levels.GetValue(spawner);
                 var groups = (Dictionary<ItemSpawnerV2.PageMode, ItemSpawnerCategoryDefinitionsV2.SpawnerPage.SpawnerTagGroup>)Group.GetValue(spawner);
@@ -104,8 +104,10 @@ namespace Gundomizer
             }
             List<string> pageIds;
             if (!ManagerSingleton<IM>.Instance.PageItemLists.TryGetValue(page, out pageIds)) return result;
-            var ids = OtherLoaderBridge.Active && !tagMode ? OtherLoaderBridge.ClassicIds(spawner)
+            bool customTree = !tagMode && OtherLoaderBridge.UsesClassicTree(spawner);
+            var ids = customTree ? OtherLoaderBridge.ClassicIds(spawner)
                 : SelectionPolicy.SectionIds(categoryOverview, pageIds, (List<string>)Working.GetValue(spawner));
+            if (!tagMode && !customTree && categoryOverview) OtherLoaderBridge.FilterClassicOverview(ids);
             var seen = new HashSet<string>(StringComparer.Ordinal);
             foreach (var id in ids)
             {

@@ -15,7 +15,7 @@ Randomize items directly in **Item Spawner V2**, including the **toolbox tablet*
 
 ## Mod compatibility
 
-Supports modded items, including **Modul / Modular Workshop** content and **OtherLoader**'s custom item IDs.
+Supports **Modul / Modular Workshop** content, **OtherLoader**, and **OtherLoaderPatched**. These mods are optional.
 
 ## Optimization
 
@@ -32,6 +32,7 @@ Edit `quaternion.gundomizer.cfg` through your mod manager's Config Editor. Requi
 
 ## Changelog
 
+- **1.0.2:** Fix missing buttons with OtherLoaderPatched and support its custom categories.
 - **1.0.1:** DLL-only metadata reader with reusable decompression buffers.
 - **1.0.0:** First public release: item, compatible gear and ammo rolls, optional auto-fill, and persistent background indexing.
 

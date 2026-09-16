@@ -24,3 +24,5 @@ Optional runtime tests launch H3VR without a headset, install a temporary test p
 ```
 
 Other suites: `-ColdIndexChecks`, `-SearchChecks`, `-AmmoFillChecks`, `-AmmoModChecks`, and `-IntegrationOnly`. Runtime tests and tools are excluded from the distributable mod package. Keep personal notes and machine settings in ignored `.local/`.
+
+`-PatchedLoaderChecks` adds OtherLoaderPatched category and spawn checks to the normal suite; install OtherLoaderPatched and MLOK Rails in the test profile. Also run the normal suite with original OtherLoader and with neither loader enabled.

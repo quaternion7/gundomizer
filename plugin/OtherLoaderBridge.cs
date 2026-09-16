@@ -17,14 +17,38 @@ namespace Gundomizer
         private static FieldInfo entries, paths, legacyIds, unlocks, currentPath, nodeEntry, children, visible, objectId, spawnWith;
         private static MethodInfo isUnlocked;
         private static FieldInfo bundles;
-        internal static bool Active => loader != null;
+        private static PatchedOtherLoaderBridge patched;
+        internal static bool Active => loader != null || patched != null;
         internal static MethodInfo SpawnHandler { get; private set; }
 
         internal static void Initialize()
         {
             BepInEx.PluginInfo info;
             if (!BepInEx.Bootstrap.Chainloader.PluginInfos.TryGetValue("h3vr.otherloader", out info)) return;
-            var assembly = info.Instance.GetType().Assembly;
+            try
+            {
+                var assembly = info.Instance.GetType().Assembly;
+                if (assembly.GetType("OtherLoader.ItemSpawner.CustomCategories.CustomCategoriesController", false) != null)
+                {
+                    var adapter = new PatchedOtherLoaderBridge(assembly);
+                    SpawnHandler = adapter.SpawnHandler;
+                    patched = adapter;
+                    Plugin.Log.LogInfo("Using OtherLoaderPatched's native IDs, custom categories and unlock state.");
+                    return;
+                }
+                InitializeLegacy(assembly);
+            }
+            catch (Exception ex)
+            {
+                // An optional loader API must not prevent the native UI hooks from loading.
+                loader = null; patched = null; bundles = null; SpawnHandler = null;
+                Plugin.Log.LogWarning("Optional integration unavailable for " + info.Metadata.Name + " "
+                    + info.Metadata.Version + "; using the native item spawner: " + ex.Message);
+            }
+        }
+
+        private static void InitializeLegacy(Assembly assembly)
+        {
             var type = assembly.GetType("OtherLoader.OtherLoader", true);
             dataType = assembly.GetType("OtherLoader.ItemSpawnerData", true);
             var node = assembly.GetType("OtherLoader.EntryNode", true);
@@ -46,11 +70,13 @@ namespace Gundomizer
         private static IDictionary Entries => (IDictionary)entries.GetValue(null);
         internal static string BundlePath(string bundle)
         {
+            if (patched != null) return patched.BundlePath(bundle);
             var map = bundles == null ? null : bundles.GetValue(null) as IDictionary;
             return map != null && map.Contains(bundle) ? map[bundle] as string : null;
         }
         internal static string Path(ItemSpawnerV2 spawner)
         {
+            if (patched != null) return patched.Path(spawner);
             if (!Active) return null;
             var data = spawner.GetComponent(dataType);
             return data == null ? null : (string)currentPath.GetValue(data);
@@ -59,7 +85,8 @@ namespace Gundomizer
         internal static ItemSpawnerID Resolve(string id)
         {
             if (string.IsNullOrEmpty(id)) return null;
-            if (Active)
+            if (patched != null) return patched.Resolve(id);
+            if (loader != null)
             {
                 var map = (IDictionary)legacyIds.GetValue(null);
                 if (map.Contains(id)) return map[id] as ItemSpawnerID;
@@ -73,11 +100,12 @@ namespace Gundomizer
             return IM.HasSpawnedID(id) ? IM.GetSpawnerID(id) : null;
         }
 
-        internal static string SelectionId(ItemSpawnerID entry) => Active && Entries.Contains(entry.MainObject.ItemID) ? entry.MainObject.ItemID : entry.ItemID;
+        internal static string SelectionId(ItemSpawnerID entry) => loader != null && Entries.Contains(entry.MainObject.ItemID) ? entry.MainObject.ItemID : entry.ItemID;
         internal static bool Available(ItemSpawnerID entry)
         {
             if (entry == null || entry.MainObject == null) return false;
-            if (Active && Entries.Contains(entry.MainObject.ItemID))
+            if (patched != null) return patched.Available(entry);
+            if (loader != null && Entries.Contains(entry.MainObject.ItemID))
             {
                 var save = unlocks.GetValue(null);
                 return save != null && (bool)isUnlocked.Invoke(save, new object[] { entry.MainObject.ItemID });
@@ -87,6 +115,7 @@ namespace Gundomizer
 
         internal static List<string> ClassicIds(ItemSpawnerV2 spawner)
         {
+            if (patched != null) return patched.ClassicIds(spawner);
             var result = new List<string>();
             string path = Path(spawner);
             var tree = (IDictionary)paths.GetValue(null);
@@ -113,8 +142,9 @@ namespace Gundomizer
 
         internal static List<FVRObject> SpawnSources(ItemSpawnerID entry)
         {
+            if (patched != null) return patched.SpawnSources(entry);
             var result = new List<FVRObject> { entry.MainObject };
-            if (Active && Entries.Contains(entry.MainObject.ItemID))
+            if (loader != null && Entries.Contains(entry.MainObject.ItemID))
             {
                 foreach (string id in (IEnumerable)spawnWith.GetValue(Entries[entry.MainObject.ItemID]))
                 {
@@ -125,6 +155,13 @@ namespace Gundomizer
             }
             else if (entry.SecondObject != null) result.Add(entry.SecondObject);
             return result;
+        }
+
+        internal static bool UsesClassicTree(ItemSpawnerV2 spawner) => loader != null || (patched != null && patched.Path(spawner) != null);
+
+        internal static void FilterClassicOverview(List<string> ids)
+        {
+            if (patched != null) patched.FilterClassicOverview(ids);
         }
     }
 }

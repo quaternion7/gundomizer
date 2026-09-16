@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.2
+
+Fix missing buttons with OtherLoaderPatched. Support its native IDs, custom categories, unlocks and bundled spawns while retaining optional support for original OtherLoader. Neither loader is required.
+
 ## 1.0.1
 
 Move the metadata reader into the mod DLL, remove the external executable, reuse decompression buffers, and read only relevant fields to reduce allocation pressure. Existing persistent caches remain compatible.
