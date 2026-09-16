@@ -25,7 +25,6 @@ foreach ($file in @('manifest.json','README.md','CHANGELOG.md','icon.png')) {
 $images = Join-Path $stage 'docs\images'
 New-Item -ItemType Directory -Path $images -Force | Out-Null
 Copy-Item -LiteralPath (Join-Path $repoRoot 'docs\images\item-spawner.png') -Destination $images
-Copy-Item -LiteralPath (Join-Path $repoRoot 'docs\images\item-spawner-original.png') -Destination $images
 Copy-Item -LiteralPath $dll -Destination $stage
 Copy-Item -LiteralPath (Join-Path (Split-Path $dll) 'AssetsTools.NET.dll') -Destination $stage
 Copy-Item -LiteralPath (Join-Path (Split-Path $dll) 'Gundomizer.Reader.exe') -Destination $stage

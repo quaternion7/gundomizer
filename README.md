@@ -1,6 +1,6 @@
 # Gundomizer
 
-[![Complete Item Spawner V2 with Gundomizer's rainbow buttons](docs/images/item-spawner.png)](docs/images/item-spawner-original.png)
+![Complete Item Spawner V2 with Gundomizer's rainbow buttons](https://raw.githubusercontent.com/quaternion7/gundomizer/main/docs/images/item-spawner.png)
 
 Randomize items directly in **Item Spawner V2**, including the **toolbox tablet**, in classic and tag-search modes.
 
@@ -34,7 +34,7 @@ Edit `quaternion.gundomizer.cfg` through your mod manager's Config Editor. Requi
 
 - **1.0.0:** First public release: item, compatible gear and ammo rolls, optional auto-fill, and persistent background indexing.
 
-[Development version history](CHANGELOG.md)
+[Development version history](https://github.com/quaternion7/gundomizer/blob/main/CHANGELOG.md)
 
 ## Credits
 

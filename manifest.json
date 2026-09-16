@@ -1,7 +1,7 @@
 {
   "name": "Gundomizer",
   "version_number": "1.0.0",
-  "website_url": "https://quaternion7.github.io/gundomizer/",
+  "website_url": "https://github.com/quaternion7/gundomizer",
   "description": "Random items, compatible gear and ammo in Item Spawner V2. Includes ammo choices, optional auto-fill and background metadata indexing.",
   "dependencies": ["BepInEx-BepInExPack_H3VR-5.4.1700"]
 }
