@@ -181,8 +181,12 @@ public static class AmmoModChecks
                         if (!immediate)
                         {
                             string expected = (string)AccessTools.Method(adapter, "SelectionId").Invoke(null, new object[] { entry });
+                            var placeholder = Get<Component>(controller, "previewFallback");
+                            bool previewVisible = spawner.IM_Detail.enabled && spawner.IM_Detail.sprite != null
+                                || placeholder != null && placeholder.gameObject.activeInHierarchy;
                             Check(Get<string>(spawner, "m_selectedID") == expected && spawner.BTN_SpawnSelectedObject.activeSelf
-                                && spawner.TXT_Title.text == entry.DisplayName && spawner.IM_Detail.sprite != null
+                                && spawner.TXT_Title.text == entry.DisplayName && previewVisible
+                                && spawner.IM_FavButtons.All(b => !b.gameObject.activeSelf)
                                 && Object.FindObjectsOfType<FVRPhysicalObject>().All(o => before.Contains(o.GetInstanceID())),
                                 "classic selection-only shows the exact round with preview, without spawning: " + round.Data.Name, log);
                             spawner.BTN_Details_Spawn();
