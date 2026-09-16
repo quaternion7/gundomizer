@@ -1,111 +1,23 @@
 # Changelog
 
-## 0.1.14 — continuous rolls and concise documentation
+## 1.0.0
 
-- Replace search pauses and timeouts with automatic continuation, loading progress and click-to-cancel. Keep one shared native load at a time and pace new requests across frames; cancelled requests never spawn later.
-- Remove the two pause-limit settings, including their saved config entries. Apply the reviewed UI/config wording.
-- Replace the README with a short Features overview and a wide capture of the real item spawner.
+First public release: random items, compatible gear and ammo in Item Spawner V2 and its toolbox tablet, with optional auto-fill and persistent background indexing.
 
-## 0.1.13 — automatic ammo filling and documentation
+## Development versions
 
-- Add **General > Auto Fill Held Item** (default on). Successful ammo rolls still spawn a loose round, then replace existing rounds and fill matching held magazines, weapon magazines/chambers, clips, and speedloaders. Selection-only rolls wait for native Spawn; a changed held target is not filled.
-- Document all six mod options, toolbox tablet usage, the compact progress checklist, and background index optimization. Correct the obsolete restriction on mod ammo without standalone spawner entries.
-- Add a reviewable catalog of visible strings/templates and real-game refill checks.
-- Route the toolbox tablet's acceptance of Gundomizer selections through the same spawn cleanup and ammo-fill handling, preserving the native stylus placement point.
-
-## 0.1.12 — metadata reset and modded ammo IDs
-
-- Add **Performance > Reset Metadata Indexing** (default off). Clear saved facts and rebuild in the background; automatically save the setting back to off. Discard results from an in-flight pre-reset helper safely.
-- Resolve ammo variants through OtherLoader's object IDs and wrapper aliases. Provide session-only native details entries for registered ammo without standalone spawner entries, retaining exact item identity and loaded caliber/class validation. Existing authored entries retain their unlock checks.
-- Add runtime coverage for A3A Exotic 12 Gauge and Bubba's Pissin Hot Reloads, plus reset/rebuild checks. Keep the optional local repair for Bubba 1.2.5's incorrect loader separate from the Gundomizer package.
-
-## 0.1.11 — persistent background connector indexing
-
-- Start a paced metadata reader with the game. Resolve actual prefab roots without loading Unity assets, and publish supported attachment/magazine/clip connectors as bundles finish.
-- Persist profile-local caches with schema/game/source/package fingerprints, checksums and atomic replacement. Rebuild changed packages independently; recover from corrupt or missing caches.
-- Keep native live checks for unindexed, ambiguous, custom-script or unsupported entries. Already-loaded components take precedence over serialized data. Preserve search budgets and resume behavior.
-- Run parsing, fingerprinting and cache work in a bundled low-priority .NET 4 helper process to avoid Unity's shared garbage-collector pauses. Include AssetsTools.NET 3.0.5 and its MIT notice.
-- Add cold/warm, package-update, corruption, removal, partial-result, missing-helper and runtime frame/memory tests.
-
-## 0.1.10 — OtherLoader integration and modded measurements
-
-- Resolve OtherLoader's browser object IDs to native spawner entries; select using the IDs its details panel expects. Keep native and modded results together and respect OtherLoader's unlock state.
-- Traverse OtherLoader's classic category tree across pages and descendants; changing its current path cancels a pending roll.
-- Route managed native Spawn clicks through OtherLoader's handler, preserving its SpawnWithIDs without duplicate spawning from competing Harmony prefixes. Keep generic initialization cleanup active.
-- Add opt-in measurements of real modded searches, process memory, background indexing, and frame intervals, plus OtherLoader integration checks. Validate the separate serialized-metadata probe against 13 installed mod bundles; it is not shipped in the plugin.
-
-## 0.1.9 — general initialization-failure cleanup
-
-- Remove the ReflexSightController-specific exclusion. Keep entries selectable, including items with missing preview artwork.
-- Clone under an inactive parent, detach before activation, and observe synchronous Unity initialization exceptions. Remove failed instances before they can Update; retain the selected entry and original error log.
-- Apply the same cleanup when accepting Gundomizer selections with native Spawn, including bundled secondary objects. Preserve shared loading limits and advance pads/counters only for successful objects.
-- Validate deliberate Awake failures, the reported HAM scope, valid spawns after failures, native bundled spawning, and attachment searches that span several clicks in the running game.
-
-## 0.1.8 — bounded searches and loaded-connector indexing
-
-- Reuse the native filtered result snapshot instead of repeating filtering and UI redraws. Slice catalog preparation across frames and compact candidate lists in linear time.
-- Index already-loaded components in short background slices, with at most 16,384 weak records and no eager prefab requests. Read current connector fields and invalidate records when native load callbacks change; unknown entries retain native validation.
-- Default to 8 new prefab loads and 10 seconds per click. Pause and resume the same shuffled order; keep one shared outstanding Gundomizer load across cancelled requests and panels.
-- Make plain random selection metadata-only and consume completed asynchronous requests directly. Log new loads, indexed rejections, and resumptions.
-- Validate budget exhaustion/resume, cancellation backpressure, zero-load background scanning, and native result equivalence in the running game.
-
-## 0.1.7 — button polish and missing previews
-
-- Round the rainbow surfaces and add subtle vertical shading and edge bevels, preserving the sliding gradient and full-size pointing targets.
-- Join the ammo roll and neutral gray popup toggle at a thin separator. Reverse the arrow while the popup is open.
-- Restyle the package logo with the spawner's framed button appearance, serif lettering, and a dice mark.
-- Show a generic package icon for missing native preview artwork; keep the entry, history and native Spawn usable without changing shared item definitions or requesting prefabs. The separate sight-initialization guard remains pending a broader solution.
-
-## 0.1.6 — compatible ammo and variant choices
-
-- Add an ammo-roll button with an adjacent popup toggle in both viewer modes. Use the held object's caliber independently of the browser category or tags.
-- Populate named variants and property descriptions from the native ammo catalog without requesting prefabs. Include firearms, magazines, clips, speedloaders, cartridges, and installed/integrated attachable firearms.
-- Add individual variant toggles, All/None, and pagination. Remember choices per caliber for the game session; disable rolling when all choices are off.
-- Respect Spawn Item Instantly, validate the loaded cartridge's actual caliber/class, and cancel a pending roll when its choices or held target change.
-- Move the native tag pager slightly right to fit the new group at the existing button row; preserve its text, size, and callbacks.
-
-## 0.1.5 — tag-search support
-
-- Show the existing buttons in the same position in classic and tag-search modes, including grid and text lists.
-- Reuse the complete native tag-filtered result set across all pages. Cancel pending rolls when the page, mode, or selected tags change.
-- Keep compatible filtering, instant-spawn/selection behavior, and nearby 1 Hz hand detection in both modes.
-
-## 0.1.4 — compatibility query reuse and timings
-
-- Preserve the user's revised tooltips, selection message, and config description in a committed baseline.
-- Capture the held assembly's mounts, wells, and loader requirements once per roll and reuse them across candidate checks. Rebuild for the final live compatibility check.
-- Retain unknown connector metadata for native validation and keep reverse firearm matches. No startup scan or eager prefab loading is introduced.
-- Log compatible-search outcome, candidate counts, requested/checked prefabs, observed load waits, and total duration to guide the next indexing step.
-- Record the staged completion plan and native ammo, asset-loading, tag-filtering, and presentation findings.
-
-## 0.1.3 — nearby held-item polling
-
-- Poll held-item context once per second for each visible classic spawner, only within 8 metres measured from the player's VR head to that spawner.
-- Use cached state for compatible-button readiness, hover text, and pending asset loads; distant and hidden panels do not scan hands or resolve grips.
-- Refresh context on a compatible click and immediately before selecting/spawning so the polling delay cannot accept a stale held item. Newly picked-up items can be used before the next scheduled poll.
-- Clarify the HAM evidence: the item is registered for spawning; a vanilla failure has not been reproduced. Preserve the guard as a conservative exclusion of the observed missing references.
-
-## 0.1.2 — optional selection before spawning
-
-- Add the **Spawn Item Instantly** boolean setting under General, enabled by default, for both randomizer buttons.
-- Disable it to select a random entry in the native details panel and history without creating an object or advancing spawn pads/counters. Use native Spawn to accept the result, or roll again.
-- Snapshot the setting at the start of each roll. Category, compatibility, cancellation, and malformed-prefab checks apply in both modes.
-
-## 0.1.1 — compact controls and malformed sight guard
-
-- Replace whole-button hue cycling with a repeat-wrapped rainbow texture sliding across each button.
-- Use a dice icon and paired gun/hand icons; keep full-height VR hit targets while reducing width.
-- Enlarge tooltip type from 34 to 52 canvas units, widen the panel, and let it grow with wrapped text.
-- Skip active reflex-sight prefabs missing native initialization references, including the shipped HAM combo scope's missing UI spawn point. Log the item and missing field before instantiation.
-- Preserve the incident logs and document the native initialization failure and the additional installed sight patch.
-- First playtest confirmed basic random/compatible spawning and tooltips. Updated build, regression, and API checks pass; revised VR visuals await testing.
-
-## 0.1.0 — local prototype
-
-- Adds animated rainbow Randomizer and Compatible buttons to the bottom-left of the classic Item Spawner V2.
-- Includes every page of the current category or subcategory.
-- Filters compatible rolls using the item in the non-pointing hand.
-- Checks native magazine wells, clip wells, authored speedloader compatibility, and available attachment mounts including installed adapters.
-- Shows hover tooltips, disables compatible rolls with empty hands, and reports empty pools.
-- Spawns one main object on the native pad, without the built-in random gun's attachment generation or bundled secondary objects.
-- Bullet filtering is deferred. Runtime VR testing is pending.
+- **0.1.14:** Automatic search continuation, loading progress, click-to-cancel, and a shorter README with a spawner preview.
+- **0.1.13:** Optional held-item ammo filling, including native Spawn and toolbox tablet placement.
+- **0.1.12:** One-shot metadata reset and support for modded ammo IDs without standalone spawner entries.
+- **0.1.11:** Persistent background metadata indexing with per-package updates and a lightweight reader.
+- **0.1.10:** OtherLoader categories, IDs and bundled spawns; performance checks with modded items.
+- **0.1.9:** Generic cleanup for failed item initialization, replacing the sight-specific exclusion.
+- **0.1.8:** Reused filter results, indexed loaded connectors, and paced prefab searches with pause limits (removed in 0.1.14).
+- **0.1.7:** Rounded, shaded rainbow buttons, grouped ammo controls, and a missing-preview fallback.
+- **0.1.6:** Compatible ammo rolls with per-caliber variant toggles.
+- **0.1.5:** Tag-search support across every results page.
+- **0.1.4:** Reused held-item compatibility queries and added timing measurements.
+- **0.1.3:** Nearby held-item checks at one-second intervals within eight metres.
+- **0.1.2:** Optional selection before spawning.
+- **0.1.1:** Sliding rainbow gradients, compact icons, larger tooltips, and an initial sight-specific guard.
+- **0.1.0:** Initial random and compatible item buttons for the classic spawner.

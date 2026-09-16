@@ -29,3 +29,20 @@ A background metadata index checks compatibility without loading entire assets j
 - **Reset Metadata Indexing** — OFF: clear and rebuild the cache once, then switch itself off.
 
 Edit `quaternion.gundomizer.cfg` through your mod manager's Config Editor. Requires **BepInExPack H3VR**.
+
+## Changelog
+
+- **1.0.0:** First public release: item, compatible gear and ammo rolls, optional auto-fill, and persistent background indexing.
+
+[Development version history](CHANGELOG.md)
+
+## Credits
+
+- Special thanks to Glicen for requesting and sponsoring the mod.
+- Anton Hand and RUST LTD. for **H3VR**.
+- The **H3VR Homebrew community**, mod authors, and tool and loader maintainers.
+- **nesrak1 / AssetsTools.NET** for the bundle metadata reader library.
+
+## Support
+
+Tips and donations are welcome on [Ko-fi](https://ko-fi.com/quaternion7). You can find my other projects and links at [quaternion7.github.io](https://quaternion7.github.io/).

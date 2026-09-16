@@ -1,7 +1,7 @@
 {
   "name": "Gundomizer",
-  "version_number": "0.1.14",
-  "website_url": "",
-  "description": "Item Spawner V2 randomizer: roll the current section or items compatible with your held object. Local prototype.",
+  "version_number": "1.0.0",
+  "website_url": "https://quaternion7.github.io/gundomizer/",
+  "description": "Random items, compatible gear and ammo in Item Spawner V2. Includes ammo choices, optional auto-fill and background metadata indexing.",
   "dependencies": ["BepInEx-BepInExPack_H3VR-5.4.1700"]
 }

@@ -37,13 +37,15 @@ if ($modsHash) {
     $original = Get-Content -LiteralPath $modsPath -Raw
     $blocks = [regex]::Split($original, '(?m)(?=^- manifestVersion:)')
     $retained = @($blocks | Where-Object { $_ -notmatch '(?m)^  name: quaternion-Gundomizer\s*$' }) -join ''
+    $websiteYaml = $manifest.website_url.Replace("'", "''")
+    $descriptionYaml = $manifest.description.Replace("'", "''")
     $yaml = @"
 - manifestVersion: 2
   name: quaternion-Gundomizer
   authorName: quaternion
-  websiteUrl: ''
+  websiteUrl: '$websiteYaml'
   displayName: Gundomizer
-  description: 'Item Spawner V2 randomizer - local prototype.'
+  description: '$descriptionYaml'
   gameVersion: ''
   networkMode: ''
   packageType: ''
