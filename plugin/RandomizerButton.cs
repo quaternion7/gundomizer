@@ -22,7 +22,14 @@ namespace Gundomizer
         private float nextActivation;
         internal void Activate(FVRViveHand hand)
         {
-            if (Time.unscaledTime < nextActivation || Owner == null || !Owner.CanClick(false)) return;
+            if (Time.unscaledTime < nextActivation || Owner == null) return;
+            if (Owner.CanCancel(this))
+            {
+                nextActivation = Time.unscaledTime + .15f;
+                Owner.CancelRoll();
+                return;
+            }
+            if (!Owner.CanClick(false)) return;
             if (Compatible || NeedsHeldContext) Owner.RefreshHeldItem(hand);
             if (!(Ready == null ? Owner.CanClick(Compatible) : Ready())) return;
             nextActivation = Time.unscaledTime + 0.15f;
@@ -44,7 +51,7 @@ namespace Gundomizer
         private void LateUpdate()
         {
             if (Owner == null) return;
-            bool ready = Ready == null ? Owner.CanClick(Compatible) : Ready();
+            bool ready = Owner.CanCancel(this) || (Ready == null ? Owner.CanClick(Compatible) : Ready());
             // Native pointables invoke callbacks directly, so readiness is checked again by Click.
             UiButton.interactable = ready;
             if (Background != null)

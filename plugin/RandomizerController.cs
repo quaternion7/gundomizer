@@ -34,20 +34,15 @@ namespace Gundomizer
         private readonly System.Random random = new System.Random();
         private readonly HashSet<string> loggedFailures = new HashSet<string>();
         private readonly HashSet<string> ammoSelections = new HashSet<string>();
-        private PendingSearch pendingSearch;
-        private sealed class PendingSearch
-        {
-            internal List<ItemSpawnerID> Candidates;
-            internal int Next;
-            internal int SectionCount;
-            internal SpawnerBridge.Context Context;
-            internal FVRPhysicalObject Held;
-            internal string Signature;
-            internal string Kind;
-            internal bool SpawnInstantly;
-            internal int AmmoRevision;
-            internal float Expires;
-        }
+        private RandomizerButton activeButton;
+        private bool cancelRequested;
+
+        internal bool CanCancel(RandomizerButton button) => busy && !cancelRequested && Visible
+            && activeButton == button && Time.unscaledTime >= nextClick;
+
+        internal void CancelRoll() { if (busy) cancelRequested = true; }
+
+        private void Progress(string message) { status = message + "\nClick again to cancel."; }
 
         internal void Initialize(ItemSpawnerV2 owner)
         {
@@ -101,8 +96,6 @@ namespace Gundomizer
                 && (body.Head.position - spawner.transform.position).sqrMagnitude <= HeldItemRangeSquared;
             // No hand/component lookups for distant panels. Measure from the VR head to THIS spawner.
             cachedHeldItem = playerNearby ? Compatibility.HeldItem(pointingHand) : null;
-            if (pendingSearch != null && pendingSearch.Kind != "Random" && pendingSearch.Held != cachedHeldItem)
-                pendingSearch = null;
             cachedHeldName = Compatibility.Name(cachedHeldItem);
             if (ammoPanel != null) ammoPanel.Refresh(cachedHeldItem);
         }
@@ -111,8 +104,6 @@ namespace Gundomizer
         {
             if (randomButton == null || compatibleButton == null || uiRoot == null || spawner == null) return;
             bool visible = Visible;
-            if (pendingSearch != null && (!visible || Time.realtimeSinceStartup > pendingSearch.Expires
-                || (pendingSearch.Context != null && !bridge.MatchesContext(pendingSearch.Context)))) pendingSearch = null;
             if (uiRoot.gameObject.activeSelf != visible) uiRoot.gameObject.SetActive(visible);
             if (!visible)
             {
@@ -126,7 +117,7 @@ namespace Gundomizer
             if (Time.unscaledTime >= nextHeldItemCheck) RefreshHeldItem();
             if (ammoPanel != null) ammoPanel.Update();
             string message = null;
-            if (busy || pendingSearch != null || Time.unscaledTime < statusUntil) message = status;
+            if (busy || Time.unscaledTime < statusUntil) message = status;
             else if (compatibleButton.Hovered)
                 message = "Random COMPATIBLE item of held item [" +
                     (cachedHeldItem == null ? "none" : cachedHeldName) + "] (" + bridge.ScopeDescription + ")";
@@ -145,13 +136,17 @@ namespace Gundomizer
 
         internal void Click(bool compatible, FVRViveHand pointingHand)
         {
+            var button = compatible ? compatibleButton : randomButton;
+            if (CanCancel(button)) { CancelRoll(); return; }
             // A fresh click can accept a newly picked-up object before the next background poll.
             if (!CanClick(false)) return;
             if (compatible) RefreshHeldItem(pointingHand);
             var held = compatible ? cachedHeldItem : null;
             if (compatible && held == null) return;
             busy = true;
-            status = compatible ? "Finding a compatible item..." : "Choosing an item...";
+            activeButton = button;
+            cancelRequested = false;
+            Progress(compatible ? "Finding a compatible item..." : "Choosing an item...");
             nextClick = Time.unscaledTime + 0.3f;
             // Run on this panel's component so scene destruction cancels pending work.
             // Capture the setting now so a pending roll cannot change from selection to spawning.
@@ -160,12 +155,15 @@ namespace Gundomizer
 
         internal void ClickAmmo(FVRViveHand hand)
         {
+            if (CanCancel(ammoPanel.RollButton)) { CancelRoll(); return; }
             if (!CanClick(false)) return;
             RefreshHeldItem(hand);
             var variants = ammoPanel.EnabledVariants();
             if (cachedHeldItem == null || variants.Count == 0) return;
             busy = true;
-            status = "Choosing compatible ammo...";
+            activeButton = ammoPanel.RollButton;
+            cancelRequested = false;
+            Progress("Choosing compatible ammo...");
             nextClick = Time.unscaledTime + 0.3f;
             StartCoroutine(GuardedRoll(true, cachedHeldItem, hand, Plugin.SpawnItemInstantly.Value,
                 variants, AmmoSelection.Shared.Revision, Plugin.AutoFillHeldItem.Value));
@@ -184,6 +182,12 @@ namespace Gundomizer
             {
                 while (true)
                 {
+                    if (cancelRequested)
+                    {
+                        metrics.Outcome = "cancelled";
+                        Message("Randomizer cancelled.");
+                        break;
+                    }
                     object current;
                     try
                     {
@@ -194,7 +198,7 @@ namespace Gundomizer
                     {
                         metrics.Outcome = "failed";
                         Plugin.Log.LogError("Randomizer request failed: " + ex);
-                        Message("Could not complete the roll. See the BepInEx log.");
+                        Message("Could not complete the roll. Check logs.");
                         break;
                     }
                     yield return current;
@@ -204,6 +208,8 @@ namespace Gundomizer
             {
                 (roll as IDisposable)?.Dispose();
                 busy = false;
+                activeButton = null;
+                cancelRequested = false;
                 nextClick = Time.unscaledTime + 0.25f;
                 metrics.Log();
             }
@@ -218,12 +224,18 @@ namespace Gundomizer
         private bool RequestSelected(string id, Vector3? targetPoint)
         {
             if (!Visible || !bridge.IsManagedSelection(id)) return false;
-            if (busy) return true;
+            if (busy)
+            {
+                if (CanCancel(null)) CancelRoll();
+                return true;
+            }
             var entry = OtherLoaderBridge.Resolve(id);
             if (!SpawnerBridge.IsAvailable(entry)) return false;
-            pendingSearch = null;
             busy = true;
-            status = "Loading " + entry.DisplayName + "...";
+            activeButton = null;
+            cancelRequested = false;
+            nextClick = Time.unscaledTime + .3f;
+            Progress("Loading " + entry.DisplayName + "...");
             var metrics = new RollMetrics { Kind = "Native selection" };
             FVRPhysicalObject fillTarget = null;
             if (Plugin.AutoFillHeldItem.Value && ammoSelections.Contains(id))
@@ -238,10 +250,9 @@ namespace Gundomizer
         private IEnumerator SpawnSelected(ItemSpawnerID entry, RollMetrics metrics, FVRPhysicalObject fillTarget, Vector3? targetPoint)
         {
             // Accepting a roll with native Spawn retains its main + SecondObject behavior.
-            // Gather the requested prefabs first, so a timeout cannot leave half a native set.
+            // Gather the requested prefabs first, so cancellation cannot leave half a native set.
             var sources = OtherLoaderBridge.SpawnSources(entry);
             var prefabs = new List<GameObject>();
-            float deadline = Time.realtimeSinceStartup + Plugin.SearchSeconds.Value;
             foreach (var source in sources)
             {
                 AnvilCallback<GameObject> request = null;
@@ -249,23 +260,21 @@ namespace Gundomizer
                 while (request == null)
                 {
                     if (AssetAccess.TryRequest(source, out request, out started)) break;
-                    if (Time.realtimeSinceStartup >= deadline)
-                    { Message("A shared item load is still pending. Press Spawn again to continue."); yield break; }
+                    Progress("Waiting for item loading...");
                     yield return null;
                 }
                 metrics.BeginRequest();
-                if (started) ++metrics.NewLoads;
+                Progress("Loading " + source.DisplayName + "... (" + (prefabs.Count + 1) + "/" + sources.Count + ")");
+                if (started) { ++metrics.NewLoads; yield return null; }
                 while (request != null && request.keepWaiting)
                 {
-                    if (Time.realtimeSinceStartup >= deadline)
-                    { Message("Item loading is still in progress. Press Spawn again to continue."); yield break; }
                     metrics.NotePending();
                     yield return null;
                 }
                 metrics.EndRequest();
                 var prefab = request == null ? null : request.Result;
                 if (prefab == null || prefab.GetComponent<FVRPhysicalObject>() == null)
-                { Message("Could not load " + entry.DisplayName + ". See the log."); yield break; }
+                { Message("Could not load " + entry.DisplayName + ". Check logs."); yield break; }
                 ConnectorIndex.Observe(source, prefab);
                 prefabs.Add(prefab);
             }
@@ -285,8 +294,8 @@ namespace Gundomizer
                 {
                     metrics.Outcome = "initialization failed";
                     Plugin.Log.LogError("Could not initialize " + sources[i].ItemID + "; removed the failed instance. " + problem);
-                    Message(i == 0 ? "Could not initialize " + entry.DisplayName + ". Failed instance removed; see the log."
-                        : "Main item spawned; a bundled item failed and was removed. See the log.");
+                    Message(i == 0 ? "Could not initialize " + entry.DisplayName + ". Failed instance removed; Check logs."
+                        : "Main item spawned; a bundled item failed and was removed. Check logs.");
                     yield break;
                 }
                 bridge.RecordSpawn(entry, i == 0, !targetPoint.HasValue);
@@ -305,18 +314,9 @@ namespace Gundomizer
             if (ammo != null) foreach (var variant in ammo)
                 if (!variants.ContainsKey(variant.Entry.ItemID)) variants.Add(variant.Entry.ItemID, variant);
             var query = compatible && ammo == null ? Compatibility.Capture(held) : null;
-            var previous = pendingSearch;
-            pendingSearch = null;
-            bool resume = previous != null && previous.Kind == metrics.Kind && previous.Held == held
-                && previous.SpawnInstantly == spawnInstantly && previous.AmmoRevision == ammoRevision
-                && previous.Signature == (query == null ? null : query.Signature)
-                && Time.realtimeSinceStartup <= previous.Expires
-                && (previous.Context == null || bridge.MatchesContext(previous.Context));
-            var candidates = resume ? previous.Candidates : ammo == null ? bridge.CaptureSection() : new List<ItemSpawnerID>();
-            if (!resume && ammo != null) foreach (var variant in variants.Values) candidates.Add(variant.Entry);
-            metrics.SectionCount = resume ? previous.SectionCount : candidates.Count;
-            metrics.Resumed = resume;
-            if (!resume)
+            var candidates = ammo == null ? bridge.CaptureSection() : new List<ItemSpawnerID>();
+            if (ammo != null) foreach (var variant in variants.Values) candidates.Add(variant.Entry);
+            metrics.SectionCount = candidates.Count;
             {
                 // Compact in linear time and yield during large catalog work. Unknown connector
                 // data stays eligible; actual loaded components can reject unrelated connectors.
@@ -346,11 +346,9 @@ namespace Gundomizer
             metrics.FilteredCount = candidates.Count;
             int inspected = 0;
             float inspectionSlice = Time.realtimeSinceStartup;
-            int newLoadLimit = Plugin.MaxNewLoads.Value;
-            float deadline = Time.realtimeSinceStartup + Plugin.SearchSeconds.Value;
             // The first match in a random permutation is uniform over matching entries. Prefabs
             // load lazily, so a click does not force every modded object into memory up front.
-            for (int candidateIndex = resume ? previous.Next : 0; candidateIndex < candidates.Count; ++candidateIndex)
+            for (int candidateIndex = 0; candidateIndex < candidates.Count; ++candidateIndex)
             {
                 if (candidateIndex % 64 == 0 && Time.realtimeSinceStartup - inspectionSlice > 0.0015f)
                 { yield return null; inspectionSlice = Time.realtimeSinceStartup; }
@@ -369,30 +367,30 @@ namespace Gundomizer
                     yield break;
                 }
                 AnvilCallback<GameObject> request = null;
-                bool cold = AssetAccess.Cached(entry.MainObject) == null;
-                if (Time.realtimeSinceStartup >= deadline || (cold && (metrics.NewLoads >= newLoadLimit || AssetAccess.LoadPending)))
-                {
-                    PauseSearch(candidates, candidateIndex, context, held, query, spawnInstantly, ammoRevision, metrics);
-                    yield break;
-                }
+                bool started = false;
                 metrics.BeginRequest();
-                try
+                while (request == null)
                 {
-                    bool started;
-                    if (!AssetAccess.TryRequest(entry.MainObject, out request, out started))
-                        request = null;
-                    if (started) ++metrics.NewLoads;
+                    if (!StillValid(context, compatible, held, hand, false, ammoRevision)) yield break;
+                    try { AssetAccess.TryRequest(entry.MainObject, out request, out started); }
+                    catch (Exception ex)
+                    {
+                        LogSkipped(entry, ex);
+                        metrics.Outcome = "load failed";
+                        Message("Could not load " + entry.DisplayName + ". Check logs.");
+                        yield break;
+                    }
+                    if (request == null)
+                    {
+                        Progress("Waiting for item loading...");
+                        metrics.NotePending();
+                        yield return null;
+                    }
                 }
-                catch (Exception ex)
-                {
-                    // A loader can throw after beginning work. End this click rather than
-                    // repeatedly asking other assets through a failing loader.
-                    LogSkipped(entry, ex);
-                    metrics.Outcome = "load failed";
-                    Message("Could not load " + entry.DisplayName + ". See the BepInEx log.");
-                    yield break;
-                }
-                if (request == null) continue;
+                Progress("Loading " + entry.DisplayName + "... (" + (candidateIndex + 1) + "/" + candidates.Count + ")");
+                // Pace speculative loads even when an asset completes synchronously. Keep
+                // only one native request outstanding across all panels, without click budgets.
+                if (started) { ++metrics.NewLoads; yield return null; }
                 bool waiting = true;
                 bool failed = false;
                 while (waiting)
@@ -400,11 +398,6 @@ namespace Gundomizer
                     if (!StillValid(context, compatible, held, hand, false, ammoRevision)) yield break;
                     try { waiting = request.keepWaiting; }
                     catch (Exception ex) { LogSkipped(entry, ex); failed = true; break; }
-                    if (waiting && Time.realtimeSinceStartup >= deadline)
-                    {
-                        PauseSearch(candidates, candidateIndex, context, held, query, spawnInstantly, ammoRevision, metrics);
-                        yield break;
-                    }
                     if (waiting)
                     {
                         metrics.NotePending();
@@ -454,7 +447,7 @@ namespace Gundomizer
                     {
                         metrics.Outcome = "initialization failed";
                         Plugin.Log.LogError("Could not initialize " + entry.ItemID + "; removed the failed instance. " + problem);
-                        Message("Could not initialize " + entry.DisplayName + ". Failed instance removed; see the log.");
+                        Message("Could not initialize " + entry.DisplayName + ". Failed instance removed; Check logs.");
                         yield break;
                     }
                     bridge.RecordSpawn(entry);
@@ -475,17 +468,6 @@ namespace Gundomizer
             string scope = bridge.IsTagMode ? "matching these tags" : "in this section";
             Message(compatible ? "No compatible items " + scope + " for " + Compatibility.Name(held) + "."
                 : "No spawnable items " + scope + ".");
-        }
-
-        private void PauseSearch(List<ItemSpawnerID> candidates, int next, SpawnerBridge.Context context,
-            FVRPhysicalObject held, Compatibility.Query query, bool spawnInstantly, int ammoRevision, RollMetrics metrics)
-        {
-            pendingSearch = new PendingSearch { Candidates = candidates, Next = next, Context = context,
-                Held = held, Signature = query == null ? null : query.Signature, Kind = metrics.Kind,
-                SpawnInstantly = spawnInstantly, AmmoRevision = ammoRevision, SectionCount = metrics.SectionCount,
-                Expires = Time.realtimeSinceStartup + 60f };
-            metrics.Outcome = "paused";
-            Message("Search paused. Click the same button to continue, or narrow the filters.");
         }
 
         private bool StillValid(SpawnerBridge.Context context, bool compatible, FVRPhysicalObject held, FVRViveHand hand,
@@ -532,7 +514,7 @@ namespace Gundomizer
             RefreshHeldItem(hand);
             if (!playerNearby || cachedHeldItem != target) return "";
             var fill = AmmoFill.Apply(target, round);
-            if (fill.Failed > 0) return ". Some ammo could not be filled. See the log.";
+            if (fill.Failed > 0) return ". Fill error (details in log).";
             return fill.Filled > 0 ? ". Filled " + Compatibility.Name(target) + "." : "";
         }
 
@@ -703,7 +685,7 @@ namespace Gundomizer
 
         private void DestroyUi()
         {
-            pendingSearch = null;
+            cancelRequested = true;
             if (previewFallback != null) Object.Destroy(previewFallback.gameObject);
             foreach (var pager in pagerOffsets) if (pager.Key != null) pager.Key.localPosition -= pager.Value;
             pagerOffsets.Clear();

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.14 — continuous rolls and concise documentation
+
+- Replace search pauses and timeouts with automatic continuation, loading progress and click-to-cancel. Keep one shared native load at a time and pace new requests across frames; cancelled requests never spawn later.
+- Remove the two pause-limit settings, including their saved config entries. Apply the reviewed UI/config wording.
+- Replace the README with a short Features overview and a wide capture of the real item spawner.
+
 ## 0.1.13 — automatic ammo filling and documentation
 
 - Add **General > Auto Fill Held Item** (default on). Successful ammo rolls still spawn a loose round, then replace existing rounds and fill matching held magazines, weapon magazines/chambers, clips, and speedloaders. Selection-only rolls wait for native Spawn; a changed held target is not filled.

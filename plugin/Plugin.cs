@@ -7,7 +7,7 @@ using HarmonyLib;
 
 namespace Gundomizer
 {
-    [BepInPlugin("quaternion.gundomizer", "Gundomizer", "0.1.13")]
+    [BepInPlugin("quaternion.gundomizer", "Gundomizer", "0.1.14")]
     [BepInProcess("h3vr.exe")]
     [BepInDependency("h3vr.otherloader", BepInDependency.DependencyFlags.SoftDependency)]
     public sealed class Plugin : BaseUnityPlugin
@@ -15,8 +15,6 @@ namespace Gundomizer
         internal static ManualLogSource Log;
         internal static ConfigEntry<bool> SpawnItemInstantly;
         internal static ConfigEntry<bool> AutoFillHeldItem;
-        internal static ConfigEntry<int> MaxNewLoads;
-        internal static ConfigEntry<float> SearchSeconds;
         internal static ConfigEntry<bool> PersistentIndex;
         internal static ConfigEntry<bool> ResetMetadataIndexing;
         private Harmony harmony;
@@ -26,26 +24,30 @@ namespace Gundomizer
             Log = Logger;
             try
             {
+                // BepInEx preserves unbound keys. Remove just the retired pause settings
+                // so existing profiles' config editors do not keep offering dead options.
+                var orphaned = AccessTools.Property(typeof(ConfigFile), "OrphanedEntries")?.GetValue(Config, null)
+                    as System.Collections.Generic.IDictionary<ConfigDefinition, string>;
+                if (orphaned != null)
+                {
+                    bool removed = orphaned.Remove(new ConfigDefinition("Performance", "New Prefab Loads Per Click"));
+                    removed |= orphaned.Remove(new ConfigDefinition("Performance", "Search Seconds Per Click"));
+                    if (removed) Config.Save();
+                }
                 SpawnItemInstantly = Config.Bind("General", "Spawn Item Instantly", true,
                     "Enabled: spawns the item when you click the button. " +
-                    "Disabled: select the random item, use the spawner's Spawn button to spawn it.");
+                    "Disabled: select the random item, use the panel's Spawn button to spawn it.");
                 AutoFillHeldItem = Config.Bind("General", "Auto Fill Held Item", true,
                     "After spawning randomized ammo, replace existing rounds and fill the held magazine or weapon to capacity with that ammo. " +
-                    "Also fills matching clips, speedloaders, and installed weapon magazines/chambers. The loose round still spawns. " +
-                    "In selection mode, filling happens only when you press Spawn. Missing magazines are not created.");
-                MaxNewLoads = Config.Bind("Performance", "New Prefab Loads Per Click", 8,
-                    new ConfigDescription("Pause a search after this many new prefab requests. Click the same button to continue the same shuffled search. " +
-                    "Lower values limit speculative loading with large mod collections; one prefab can still require a large bundle.", new AcceptableValueRange<int>(1, 64)));
-                SearchSeconds = Config.Bind("Performance", "Search Seconds Per Click", 10f,
-                    new ConfigDescription("Pause a search after this many seconds. An already-started shared game load continues; clicking again resumes the search.",
-                    new AcceptableValueRange<float>(1f, 60f)));
+                    "Also fills matching clips, speedloaders, and installed weapon magazines/chambers of the held item. " +
+                    "In selection mode, filling happens only when you press Spawn.");
                 PersistentIndex = Config.Bind("Performance", "Persistent Connector Index", true,
                     "Read and cache prefab connector metadata slowly in the background, without loading Unity assets. " +
                     "Only changed packages/bundles are rebuilt. Unindexed items keep the normal live checks. Restart the game after changing this setting.");
                 ResetMetadataIndexing = Config.Bind("Performance", "Reset Metadata Indexing", false,
                     "Set true to discard Gundomizer's saved connector metadata and rebuild it in the background. " +
                     "Runs once and switches itself back to false. Applies during play when changed through a config manager, " +
-                    "or on the next launch when edited with the game closed. Live compatibility checks remain available while rebuilding.");
+                    "or on the next launch when edited with the game closed.");
                 SpawnerBridge.Validate();
                 OtherLoaderBridge.Initialize();
                 harmony = new Harmony("quaternion.gundomizer");
@@ -60,7 +62,7 @@ namespace Gundomizer
                     prefix: new HarmonyMethod(typeof(Plugin), nameof(BeforeSelectedSpawn)));
                 harmony.Patch(AccessTools.Method(typeof(ItemSpawnerV2), "ExternalSpawnFromLaserToPoint"),
                     prefix: new HarmonyMethod(typeof(Plugin), nameof(BeforePortableSpawn)));
-                Logger.LogInfo("Gundomizer 0.1.13 loaded. Classic and tag viewer randomizer enabled.");
+                Logger.LogInfo("Gundomizer 0.1.14 loaded. Classic and tag viewer randomizer enabled.");
                 ConnectorIndex.Start(this);
                 try { PersistentConnectorIndex.Start(this); }
                 catch (Exception ex) { Logger.LogWarning("Persistent indexing unavailable; live search remains enabled: " + ex); }

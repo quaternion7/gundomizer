@@ -83,7 +83,7 @@ public static class ModdedMeasurements
                 e.MainObject.IsModContent.ToString(), (loading.GetValue(e.MainObject) != null).ToString() }))).ToArray());
         log("MODDED CATALOG objects=" + IM.OD.Count + " spawnerEntries=" + entries.Length + " modEntries=" + entries.Count(e => e.MainObject.IsModContent));
         var output = Path.Combine(directory, integrationOnly ? "integration-only.tsv" : "measurements.tsv");
-        File.WriteAllText(output, "held\tsection\troll\tclick\tpool\tms\tprivateDeltaMiB\tcompletedDelta\tmaxFrameMs\tframesOver50\tpaused\tstatus\tselected\n");
+        File.WriteAllText(output, "held\tsection\troll\tpool\tms\tprivateDeltaMiB\tcompletedDelta\tmaxFrameMs\tframesOver50\tstatus\tselected\n");
         var meter = spawner.gameObject.AddComponent<MeasurementFrames>();
         GameObject heldObject = null;
         plugin.Config.SaveOnConfigSet = false; instant.Value = false;
@@ -140,41 +140,29 @@ public static class ModdedMeasurements
                     log("SECTION " + entry.ItemID + " page=" + page + " pool=" + pool.Count + " modded=" + pool.Count(e => e.MainObject.IsModContent));
                     for (int roll = 0; roll < 3; ++roll)
                     {
-                        int clicks = 0;
-                        do
+                        yield return new WaitForSecondsRealtime(.35f);
+                        Call(controller, "RefreshHeldItem", new object[] { null });
+                        if (!(bool)Call(controller, "CanClick", true)) throw new Exception("Compatible button not ready for " + entry.ItemID);
+                        int loadedBefore = LoadedCount(); memory = PrivateBytes(); meter.Reset(); watch.Reset(); watch.Start();
+                        log("MEASURE BEGIN " + entry.ItemID + " page=" + page + " roll=" + roll);
+                        Call(controller, "Click", true, null);
+                        deadline = Time.realtimeSinceStartup + 180;
+                        while (Get<bool>(controller, "busy") && Time.realtimeSinceStartup < deadline) yield return null;
+                        watch.Stop();
+                        if (Get<bool>(controller, "busy")) throw new Exception("Search exceeded the test harness's 180-second limit");
+                        string selected = Get<string>(spawner, "m_selectedID"), status = Get<string>(controller, "status");
+                        string row = string.Join("\t", new[] { entry.ItemID, page == 2 ? "ammo" : "attachments", roll.ToString(), pool.Count.ToString(),
+                            N(watch.Elapsed.TotalMilliseconds), N((PrivateBytes() - memory) / 1048576.0), (LoadedCount() - loadedBefore).ToString(),
+                            N(meter.Maximum), meter.Over50.ToString(), Clean(status), Clean(selected) });
+                        File.AppendAllText(output, row + "\n"); log("MEASURE " + row);
+                        if (status.StartsWith("Selected", StringComparison.Ordinal))
                         {
-                            yield return new WaitForSecondsRealtime(.35f);
-                            Call(controller, "RefreshHeldItem", new object[] { null });
-                            if (!(bool)Call(controller, "CanClick", true)) throw new Exception("Compatible button not ready for " + entry.ItemID);
-                            int loadedBefore = LoadedCount(); memory = PrivateBytes(); meter.Reset(); watch.Reset(); watch.Start();
-                            log("MEASURE BEGIN " + entry.ItemID + " page=" + page + " roll=" + roll + " click=" + clicks);
-                            Call(controller, "Click", true, null);
-                            deadline = Time.realtimeSinceStartup + 30;
-                            while (Get<bool>(controller, "busy") && Time.realtimeSinceStartup < deadline) yield return null;
-                            watch.Stop();
-                            if (Get<bool>(controller, "busy")) throw new Exception("Search did not respect its time limit");
-                            bool paused = Get<object>(controller, "pendingSearch") != null;
-                            string selected = Get<string>(spawner, "m_selectedID"), status = Get<string>(controller, "status");
-                            string row = string.Join("\t", new[] { entry.ItemID, page == 2 ? "ammo" : "attachments", roll.ToString(), clicks.ToString(), pool.Count.ToString(),
-                                N(watch.Elapsed.TotalMilliseconds), N((PrivateBytes() - memory) / 1048576.0), (LoadedCount() - loadedBefore).ToString(),
-                                N(meter.Maximum), meter.Over50.ToString(), paused.ToString(), Clean(status), Clean(selected) });
-                            File.AppendAllText(output, row + "\n"); log("MEASURE " + row);
-                            if (!paused && status.StartsWith("Selected", StringComparison.Ordinal))
-                            {
-                                var chosen = (ItemSpawnerID)AccessTools.Method(controller.GetType().Assembly.GetType("Gundomizer.OtherLoaderBridge"), "Resolve").Invoke(null, new object[] { selected });
-                                var callback = loading.GetValue(chosen.MainObject) as AnvilCallback<GameObject>;
-                                bool fits = callback != null && callback.IsCompleted && (bool)AccessTools.Method(controller.GetType().Assembly.GetType("Gundomizer.Compatibility"), "Matches")
-                                    .Invoke(null, new object[] { physical, callback.Result });
-                                if (!fits || !pool.Contains(chosen)) throw new Exception("Selected item no longer matches its held target/scope: " + selected);
-                                log("PASS measured selection matches held target and section: " + selected);
-                            }
-                            ++clicks;
-                            if (!paused) break;
-                        } while (clicks < 4);
-                        if (Get<object>(controller, "pendingSearch") != null)
-                        {
-                            log("MEASURE stopped after four budgeted clicks; search still incomplete");
-                            AccessTools.Field(controller.GetType(), "pendingSearch").SetValue(controller, null);
+                            var chosen = (ItemSpawnerID)AccessTools.Method(controller.GetType().Assembly.GetType("Gundomizer.OtherLoaderBridge"), "Resolve").Invoke(null, new object[] { selected });
+                            var callback = loading.GetValue(chosen.MainObject) as AnvilCallback<GameObject>;
+                            bool fits = callback != null && callback.IsCompleted && (bool)AccessTools.Method(controller.GetType().Assembly.GetType("Gundomizer.Compatibility"), "Matches")
+                                .Invoke(null, new object[] { physical, callback.Result });
+                            if (!fits || !pool.Contains(chosen)) throw new Exception("Selected item no longer matches its held target/scope: " + selected);
+                            log("PASS measured selection matches held target and section: " + selected);
                         }
                     }
                 }
@@ -192,7 +180,7 @@ public static class ModdedMeasurements
         }
         finally
         {
-            AccessTools.Field(controller.GetType(), "pendingSearch").SetValue(controller, null);
+            Call(controller, "CancelRoll");
             instant.Value = priorInstant; plugin.Config.SaveOnConfigSet = priorSave;
             GM.CurrentPlayerBody.Head.position = priorHead;
             for (int i = 0; i < hands.Length; ++i) { heldField.SetValue(hands[i], priorHeld[i]); hands[i].enabled = priorEnabled[i]; }

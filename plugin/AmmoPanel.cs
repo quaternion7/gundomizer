@@ -30,6 +30,7 @@ namespace Gundomizer
         private int revision;
         private int enabledCount;
         internal bool IsOpen => popup.gameObject.activeSelf;
+        internal RandomizerButton RollButton => rollButton;
 
         internal AmmoPanel(RandomizerController owner, ItemSpawnerV2 spawner, RectTransform root,
             GameObject template, float left, float y)

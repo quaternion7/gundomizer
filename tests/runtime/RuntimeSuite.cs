@@ -26,7 +26,8 @@ public static class RuntimeSuite
 
     public static IEnumerator Run(string directory, Action<string> log)
     {
-        if (File.Exists(Path.Combine(directory, "ammo-mod-checks.txt")) || File.Exists(Path.Combine(directory, "ammo-fill-checks.txt")))
+        if (File.Exists(Path.Combine(directory, "ammo-mod-checks.txt")) || File.Exists(Path.Combine(directory, "ammo-fill-checks.txt"))
+            || File.Exists(Path.Combine(directory, "readme-preview.txt")) || File.Exists(Path.Combine(directory, "search-checks.txt")))
         {
             var setup = AmmoModChecks.Prepare(directory, log);
             try { while (setup.MoveNext()) yield return setup.Current; }
@@ -60,6 +61,13 @@ public static class RuntimeSuite
         Check(spawner != null, "live native ItemSpawnerV2 exists", log);
         var controller = spawner.GetComponents<MonoBehaviour>().FirstOrDefault(c => c.GetType().FullName == "Gundomizer.RandomizerController");
         Check(controller != null && controller.enabled, "Gundomizer attached and initialized", log);
+        if (File.Exists(Path.Combine(directory, "readme-preview.txt")) || File.Exists(Path.Combine(directory, "search-checks.txt")))
+        {
+            var preview = ReadmePreview.Run(spawner, controller, directory, log, File.Exists(Path.Combine(directory, "search-checks.txt")));
+            try { while (preview.MoveNext()) yield return preview.Current; }
+            finally { (preview as IDisposable).Dispose(); }
+            yield break;
+        }
         if (File.Exists(Path.Combine(directory, "ammo-fill-checks.txt")))
         {
             var checks = AmmoFillChecks.Run(spawner, controller, directory, log);
@@ -259,20 +267,9 @@ public static class RuntimeSuite
                 yield return new WaitForSecondsRealtime(0.35f);
                 log("ATTACHMENT ROLL " + i + " instant=" + config.Value);
                 deadline = Time.realtimeSinceStartup + 90;
-                int clicks = 0;
-                do
-                {
-                    Get<MonoBehaviour>(controller, "compatibleButton").GetComponent<Button>().onClick.Invoke();
-                    ++clicks;
-                    while (Get<bool>(controller, "busy") && Time.realtimeSinceStartup < deadline) yield return null;
-                    if (Get<object>(controller, "pendingSearch") != null)
-                    {
-                        log("Resuming bounded attachment search after click " + clicks);
-                        yield return new WaitForSecondsRealtime(0.35f);
-                    }
-                } while (Get<object>(controller, "pendingSearch") != null && Time.realtimeSinceStartup < deadline);
-                Check(!Get<bool>(controller, "busy") && Get<object>(controller, "pendingSearch") == null,
-                    "attachment roll " + i + " completed in " + clicks + " click(s)", log);
+                Get<MonoBehaviour>(controller, "compatibleButton").GetComponent<Button>().onClick.Invoke();
+                while (Get<bool>(controller, "busy") && Time.realtimeSinceStartup < deadline) yield return null;
+                Check(!Get<bool>(controller, "busy"), "attachment roll " + i + " completed from one click", log);
                 string selected = Get<string>(spawner, "m_selectedID");
                 var attachment = IM.GetSpawnerID(selected).MainObject.GetGameObject().GetComponent<FVRFireArmAttachment>();
                 Check(attachment != null && attachment.CanAttach(), "selected attachment permits attachment: " + selected, log);

@@ -16,6 +16,7 @@ public static class PerformanceChecks
     private static int requests;
     private static bool stall;
     private static AnvilCallback<GameObject> stalled;
+    private static readonly Dictionary<int, int> requestsPerFrame = new Dictionary<int, int>();
     private static readonly System.Reflection.FieldInfo loading = AccessTools.Field(typeof(AnvilAsset), "m_loadingState");
     private static T Get<T>(object target, string name) => (T)AccessTools.Field(target.GetType(), name).GetValue(target);
     private static object Call(object target, string name, params object[] args) => AccessTools.Method(target.GetType(), name).Invoke(target, args);
@@ -27,6 +28,8 @@ public static class PerformanceChecks
         GameObject prefab;
         if (!fixtures.TryGetValue(__instance, out prefab)) return true;
         ++requests;
+        int count; requestsPerFrame.TryGetValue(Time.frameCount, out count);
+        requestsPerFrame[Time.frameCount] = count + 1;
         __result = new AnvilCallback<GameObject>(stall ? null : new AnvilDummyOperation(prefab), null);
         loading.SetValue(__instance, __result);
         if (stall) stalled = __result;
@@ -38,9 +41,9 @@ public static class PerformanceChecks
         var assembly = controller.GetType().Assembly;
         var plugin = BepInEx.Bootstrap.Chainloader.PluginInfos["quaternion.gundomizer"].Instance;
         var instant = (ConfigEntry<bool>)AccessTools.Field(plugin.GetType(), "SpawnItemInstantly").GetValue(null);
-        var maxLoads = (ConfigEntry<int>)AccessTools.Field(plugin.GetType(), "MaxNewLoads").GetValue(null);
         bool priorInstant = instant.Value;
-        int priorLimit = maxLoads.Value;
+        bool priorSave = plugin.Config.SaveOnConfigSet;
+        plugin.Config.SaveOnConfigSet = false;
         spawner.BTN_SetPageMode(3);
         spawner.BTN_SimpleMode_SwitchToTagSearch();
         spawner.BTN_Tag_ClearSelectedTags();
@@ -79,10 +82,11 @@ public static class PerformanceChecks
         var entries = new List<ItemSpawnerID>();
         var hook = new Harmony("quaternion.gundomizer.performancefixture." + Guid.NewGuid());
         requests = 0; stall = false; stalled = null;
+        requestsPerFrame.Clear();
         try
         {
             hook.Patch(AccessTools.Method(typeof(AnvilAsset), "GetGameObjectAsync"), prefix: new HarmonyMethod(typeof(PerformanceChecks), nameof(FakeLoad)));
-            for (int i = 0; i < 3; ++i)
+            for (int i = 0; i < 12; ++i)
             {
                 var obj = ScriptableObject.CreateInstance<FVRObject>();
                 obj.ItemID = "Gundomizer-test-" + Guid.NewGuid(); obj.Category = FVRObject.ObjectCategory.Attachment;
@@ -97,21 +101,14 @@ public static class PerformanceChecks
             var fixtureIds = entries.Select(e => e.ItemID).ToList();
             registry.PageItemLists[ItemSpawnerV2.PageMode.Attachments] = fixtureIds;
             AccessTools.Field(spawner.GetType(), "WorkingItemIDs").SetValue(spawner, fixtureIds);
-            instant.Value = false; maxLoads.Value = 1;
-            object firstPending = null;
-            for (int i = 0; i < 3; ++i)
-            {
-                yield return new WaitForSecondsRealtime(.35f);
-                Get<MonoBehaviour>(controller, "compatibleButton").GetComponent<Button>().onClick.Invoke();
-                deadline = Time.realtimeSinceStartup + 5;
-                while (Get<bool>(controller, "busy") && Time.realtimeSinceStartup < deadline) yield return null;
-                Check(!Get<bool>(controller, "busy") && requests == i + 1, "cold-load budget permits exactly one new request per click " + i, log);
-                var pending = Get<object>(controller, "pendingSearch");
-                if (i == 0) firstPending = pending;
-                if (i < 2) Check(pending != null && (i == 0 || Get<List<ItemSpawnerID>>(pending, "Candidates") == Get<List<ItemSpawnerID>>(firstPending, "Candidates")),
-                    "paused search retains its original random order and does not report an empty pool", log);
-                else Check(pending == null && Get<string>(controller, "status").StartsWith("No compatible"), "only an exhausted search reports no compatible items", log);
-            }
+            instant.Value = false;
+            yield return new WaitForSecondsRealtime(.35f);
+            Get<MonoBehaviour>(controller, "compatibleButton").GetComponent<Button>().onClick.Invoke();
+            deadline = Time.realtimeSinceStartup + 10;
+            while (Get<bool>(controller, "busy") && Time.realtimeSinceStartup < deadline) yield return null;
+            Check(!Get<bool>(controller, "busy") && requests == 12, "one click automatically checks all 12 cold candidates, exceeding the former limit", log);
+            Check(requestsPerFrame.Values.All(v => v == 1), "new requests are paced to at most one per frame", log);
+            Check(Get<string>(controller, "status").StartsWith("No compatible"), "only an exhausted search reports no compatible items", log);
             // A normal selection roll must not issue any prefab requests, even for an uncached item.
             foreach (var entry in entries) loading.SetValue(entry.MainObject, null);
             int beforeRequests = requests;
@@ -125,24 +122,63 @@ public static class PerformanceChecks
             Get<MonoBehaviour>(controller, "randomButton").GetComponent<Button>().onClick.Invoke();
             yield return null;
             Check(stalled != null && Get<bool>(controller, "busy"), "fixture starts one genuinely pending load", log);
-            spawner.BTN_SetPageMode(4);
+            yield return new WaitForSecondsRealtime(10.5f);
+            var button = Get<MonoBehaviour>(controller, "randomButton").GetComponent<Button>();
+            Check(Get<bool>(controller, "busy") && button.interactable && Get<string>(controller, "status").Contains("Click again to cancel"),
+                "slow load continues beyond ten seconds with progress and an active cancel button", log);
+            var originalStalled = stalled;
+            var originalStalledObject = entries.First(e => loading.GetValue(e.MainObject) == stalled).MainObject;
+            var beforeCancel = new HashSet<int>(Object.FindObjectsOfType<FVRPhysicalObject>().Select(o => o.GetInstanceID()));
+            button.onClick.Invoke();
             yield return null;
-            Check(!Get<bool>(controller, "busy"), "changing section cancels a waiting roll", log);
+            Check(!Get<bool>(controller, "busy") && Get<string>(controller, "status") == "Randomizer cancelled.", "clicking the active button cancels its roll", log);
             var access = assembly.GetType("Gundomizer.AssetAccess");
             var different = entries.First(e => loading.GetValue(e.MainObject) == null).MainObject;
             object[] requestArgs = { different, null, false };
             Check(!(bool)AccessTools.Method(access, "TryRequest").Invoke(null, requestArgs), "another panel cannot add a new load after cancellation", log);
-            stalled.Request = new AnvilDummyOperation(fixtures[entries.First(e => loading.GetValue(e.MainObject) == stalled).MainObject]);
-            stalled.Pump(); stall = false;
-            Check((bool)AccessTools.Method(access, "TryRequest").Invoke(null, requestArgs), "shared load gate reopens after actual completion", log);
-            ((AnvilCallback<GameObject>)requestArgs[1]).Pump();
+            AccessTools.Field(spawner.GetType(), "WorkingItemIDs").SetValue(spawner, new List<string> { different.ItemID });
+            int countBeforeWait = requests;
+            yield return new WaitForSecondsRealtime(.35f);
+            button.onClick.Invoke();
+            yield return new WaitForSecondsRealtime(.4f);
+            Check(Get<bool>(controller, "busy") && requests == countBeforeWait && Get<string>(controller, "status").StartsWith("Waiting"),
+                "next roll waits automatically behind the cancelled shared load", log);
+            originalStalled.Request = new AnvilDummyOperation(fixtures[originalStalledObject]);
+            originalStalled.Pump();
+            yield return null; yield return null;
+            Check(requests == countBeforeWait + 1 && stalled != originalStalled && Get<bool>(controller, "busy"),
+                "waiting roll starts its request automatically when the shared gate opens", log);
+            button.onClick.Invoke(); yield return null;
+            stalled.Request = new AnvilDummyOperation(fixtures[different]); stalled.Pump();
+            yield return null;
+            Check(Object.FindObjectsOfType<FVRPhysicalObject>().All(o => beforeCancel.Contains(o.GetInstanceID())),
+                "finishing cancelled loads never spawns an item", log);
+
+            // Native Spawn has no timeout either, and can cancel without cancelling Anvil.
+            loading.SetValue(different, null);
+            instant.Value = false;
+            yield return new WaitForSecondsRealtime(.35f);
+            button.onClick.Invoke();
+            spawner.BTN_Details_Spawn();
+            yield return new WaitForSecondsRealtime(10.5f);
+            Check(Get<bool>(controller, "busy"), "native Spawn keeps waiting past the former timeout", log);
+            spawner.BTN_Details_Spawn(); yield return null;
+            Check(!Get<bool>(controller, "busy") && Get<string>(controller, "status") == "Randomizer cancelled.", "native Spawn can cancel its pending acceptance", log);
+            stalled.Request = new AnvilDummyOperation(fixtures[different]); stalled.Pump();
+            yield return null;
+            Check(Object.FindObjectsOfType<FVRPhysicalObject>().All(o => beforeCancel.Contains(o.GetInstanceID())), "cancelled native acceptance leaves no late object", log);
+
+            loading.SetValue(different, null); instant.Value = true;
+            yield return new WaitForSecondsRealtime(.35f); button.onClick.Invoke(); yield return null;
+            spawner.BTN_SetPageMode(4); yield return null;
+            Check(!Get<bool>(controller, "busy"), "changing section still cancels a waiting roll", log);
         }
         finally
         {
             if (stalled != null && !stalled.IsCompleted) { stalled.Request = new AnvilDummyOperation(null); stalled.Pump(); }
             hook.UnpatchSelf();
-            instant.Value = priorInstant; maxLoads.Value = priorLimit;
-            AccessTools.Field(controller.GetType(), "pendingSearch").SetValue(controller, null);
+            Call(controller, "CancelRoll");
+            instant.Value = priorInstant; plugin.Config.SaveOnConfigSet = priorSave;
             registry.PageItemLists[ItemSpawnerV2.PageMode.Attachments] = originalPage;
             AccessTools.Field(spawner.GetType(), "WorkingItemIDs").SetValue(spawner, originalWorking);
             foreach (var entry in entries) { ids.Remove(entry.ItemID); Object.Destroy(entry.MainObject); Object.Destroy(entry); }

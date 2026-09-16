@@ -28,7 +28,7 @@ namespace Gundomizer
             started = false;
             if (request != null) return true; // Borrow the game's existing request, including loads by other mods.
             if (LoadPending) return false;
-            // A cancelled/timed-out roll never cancels Anvil's shared request or frees this gate early.
+            // A cancelled roll never cancels Anvil's shared request or frees this gate early.
             // This prevents successive clicks/panels from accumulating outstanding loads.
             request = obj.GetGameObjectAsync();
             started = true;

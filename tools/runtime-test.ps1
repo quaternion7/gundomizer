@@ -9,7 +9,9 @@ param(
     [switch]$IndexChecks,
     [switch]$ColdIndexChecks,
     [switch]$AmmoModChecks,
-    [switch]$AmmoFillChecks
+    [switch]$AmmoFillChecks,
+    [switch]$ReadmePreview,
+    [switch]$SearchChecks
 )
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
@@ -45,6 +47,8 @@ if ($Action -eq 'Start') {
     Build-Suite $RunDirectory
     if ($AmmoModChecks) { [IO.File]::WriteAllText((Join-Path $RunDirectory 'ammo-mod-checks.txt'), 'enabled') }
     if ($AmmoFillChecks) { [IO.File]::WriteAllText((Join-Path $RunDirectory 'ammo-fill-checks.txt'), 'enabled') }
+    if ($ReadmePreview) { [IO.File]::WriteAllText((Join-Path $RunDirectory 'readme-preview.txt'), 'enabled') }
+    if ($SearchChecks) { [IO.File]::WriteAllText((Join-Path $RunDirectory 'search-checks.txt'), 'enabled') }
     if ($MeasureMods -or $IntegrationOnly) { [IO.File]::WriteAllText((Join-Path $RunDirectory 'measure-mods.txt'), 'enabled') }
     if ($IntegrationOnly) { [IO.File]::WriteAllText((Join-Path $RunDirectory 'integration-only.txt'), 'enabled') }
     if ($IndexChecks -or $ColdIndexChecks) { [IO.File]::WriteAllText((Join-Path $RunDirectory 'index-checks.txt'), 'enabled') }
@@ -72,6 +76,12 @@ if ($Action -eq 'Run') {
     Build-Suite $RunDirectory
     $ammoMarker = Join-Path $RunDirectory 'ammo-mod-checks.txt'
     $fillMarker = Join-Path $RunDirectory 'ammo-fill-checks.txt'
+    $previewMarker = Join-Path $RunDirectory 'readme-preview.txt'
+    if ($ReadmePreview) { [IO.File]::WriteAllText($previewMarker, 'enabled') }
+    elseif (Test-Path -LiteralPath $previewMarker) { Remove-Item -LiteralPath $previewMarker }
+    $searchMarker = Join-Path $RunDirectory 'search-checks.txt'
+    if ($SearchChecks) { [IO.File]::WriteAllText($searchMarker, 'enabled') }
+    elseif (Test-Path -LiteralPath $searchMarker) { Remove-Item -LiteralPath $searchMarker }
     if ($AmmoFillChecks) { [IO.File]::WriteAllText($fillMarker, 'enabled') }
     elseif (Test-Path -LiteralPath $fillMarker) { Remove-Item -LiteralPath $fillMarker }
     if ($AmmoModChecks) { [IO.File]::WriteAllText($ammoMarker, 'enabled') }
