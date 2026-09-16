@@ -19,17 +19,16 @@ namespace Gundomizer.Indexing
         private readonly AutoResetEvent wake = new AutoResetEvent(false);
         private readonly Thread thread;
         private readonly Dictionary<string, ConnectorKind> types;
-        private readonly string directory, game, plugins, readerExecutable;
+        private readonly string directory, game, plugins;
         private readonly Action<string> log;
         private int cacheHits, rebuilt, failed, factsCount;
         private long bytesRead;
         private bool finished;
         private int generation;
         private bool resetPending, resetting;
-        internal IndexWorker(string directory, string game, string plugins, Dictionary<string, ConnectorKind> types, Action<string> log, string readerExecutable = null)
+        internal IndexWorker(string directory, string game, string plugins, Dictionary<string, ConnectorKind> types, Action<string> log)
         {
             this.directory = directory; this.game = game; this.plugins = plugins; this.types = types; this.log = log;
-            this.readerExecutable = readerExecutable ?? Path.Combine(Path.GetDirectoryName(typeof(IndexWorker).Assembly.Location), "Gundomizer.Reader.exe");
             thread = new Thread(Run) { IsBackground = true, Name = "Gundomizer metadata index", Priority = ThreadPriority.BelowNormal };
             thread.Start();
         }
@@ -90,7 +89,7 @@ namespace Gundomizer.Indexing
         private void ProcessQueue()
         {
             var budget = new ReadBudget(stop, true);
-            var reader = new ExternalMetadataReader(readerExecutable, directory, game, plugins, types, budget);
+            var reader = new CachedMetadataReader(directory, game, plugins, types, budget);
             while (!stop.WaitOne(0, false))
             {
                 string path = null;
@@ -105,7 +104,7 @@ namespace Gundomizer.Indexing
                 }
                 if (reset)
                 {
-                    // The previous helper has exited before this point, so it cannot recreate
+                    // The previous read has finished before this point, so it cannot recreate
                     // an old cache after deletion. All filesystem work stays off Unity's thread.
                     try { log("Metadata index reset: removed " + IndexCache.Clear(directory) + " saved bundle entries; rebuilding in the background."); }
                     finally { lock (gate) resetting = false; }

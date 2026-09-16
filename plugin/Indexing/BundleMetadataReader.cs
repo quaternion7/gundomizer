@@ -10,13 +10,14 @@ namespace Gundomizer.Indexing
     {
         private readonly Dictionary<string, ConnectorKind> knownTypes;
         private readonly ReadBudget budget;
+        private readonly BlockBuffers buffers = new BlockBuffers();
         internal BundleMetadataReader(Dictionary<string, ConnectorKind> knownTypes, ReadBudget budget)
         { this.knownTypes = knownTypes; this.budget = budget; }
 
         internal BundleFacts Read(string path, HashSet<string> requested = null)
         {
             var result = new BundleFacts();
-            var manager = new AssetsManager();
+            var manager = new AssetsManager { UseMonoTemplateFieldCache = true };
             using (var input = new BudgetStream(File.Open(path, FileMode.Open, FileAccess.Read, FileShare.Read), budget))
             {
                 try
@@ -38,7 +39,13 @@ namespace Gundomizer.Indexing
                     foreach (var block in bundle.file.BlockAndDirInfo.BlockInfos)
                         if (block.DecompressedSize > 1024 * 1024 || block.GetCompressionType() == 1)
                             throw new NotSupportedException("Oversized or LZMA data block");
-                    if (bundle.file.DataReader.BaseStream is LZ4BlockStream blocks) blocks.maxBlockMapSize = 4;
+                    if (bundle.file.DataReader.BaseStream is LZ4BlockStream blocks)
+                    {
+                        var previous = bundle.file.DataReader;
+                        bundle.file.DataReader = new AssetsFileReader(new ReusableBlockStream(blocks.BaseStream, blocks.BaseOffset,
+                            bundle.file.BlockAndDirInfo.BlockInfos, buffers, budget)) { BigEndian = previous.BigEndian };
+                        previous.Close(); // LZ4BlockStream does not own its underlying bundle stream.
+                    }
                     if (bundle.file.BlockAndDirInfo.DirectoryInfos.Count > 1024) throw new NotSupportedException("Oversized bundle directory");
                     for (int i = 0; i < bundle.file.BlockAndDirInfo.DirectoryInfos.Count; ++i)
                     {
@@ -123,11 +130,11 @@ namespace Gundomizer.Indexing
 
         private static bool Local(AssetTypeValueField pointer) => !pointer.IsDummy && !pointer["m_FileID"].IsDummy
             && !pointer["m_PathID"].IsDummy && pointer["m_FileID"].AsInt == 0 && pointer["m_PathID"].AsLong != 0;
-        private static AssetTypeValueField Field(AssetsManager manager, AssetsFileInstance file, long id, int max = 256 * 1024)
+        private AssetTypeValueField Field(AssetsManager manager, AssetsFileInstance file, long id, int max = 256 * 1024)
         {
             var info = file.file.GetAssetInfo(id);
             if (info == null || info.ByteSize > max) throw new NotSupportedException("Missing or oversized metadata record");
-            return manager.GetBaseField(file, info);
+            return SelectedFields.Read(manager, file, info, budget);
         }
     }
 }

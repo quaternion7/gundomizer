@@ -20,6 +20,11 @@ if ($modsHash) { Copy-Item -LiteralPath $modsPath -Destination $backupRoot }
 if (Test-Path -LiteralPath $target) { Copy-Item -LiteralPath $target -Destination $backupRoot -Recurse }
 New-Item -ItemType Directory -Path $target -Force | Out-Null
 Expand-Archive -LiteralPath $zip -DestinationPath $target -Force
+# The old helper is no longer used. The complete previous install is backed up above.
+foreach ($obsolete in @('Gundomizer.Reader.exe', 'Gundomizer.Reader.exe.config')) {
+    $oldFile = Join-Path $target $obsolete
+    if (Test-Path -LiteralPath $oldFile) { Remove-Item -LiteralPath $oldFile }
+}
 $parts = $manifest.version_number.Split('.')
 $entry = [ordered]@{
     manifestVersion = 2; name = 'quaternion-Gundomizer'; authorName = 'quaternion'

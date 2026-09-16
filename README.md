@@ -32,6 +32,7 @@ Edit `quaternion.gundomizer.cfg` through your mod manager's Config Editor. Requi
 
 ## Changelog
 
+- **1.0.1 (unreleased):** DLL-only metadata reader with reusable decompression buffers.
 - **1.0.0:** First public release: item, compatible gear and ammo rolls, optional auto-fill, and persistent background indexing.
 
 [Development version history](https://github.com/quaternion7/gundomizer/blob/main/CHANGELOG.md)

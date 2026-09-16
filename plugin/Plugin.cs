@@ -7,7 +7,7 @@ using HarmonyLib;
 
 namespace Gundomizer
 {
-    [BepInPlugin("quaternion.gundomizer", "Gundomizer", "1.0.0")]
+    [BepInPlugin("quaternion.gundomizer", "Gundomizer", "1.0.1")]
     [BepInProcess("h3vr.exe")]
     [BepInDependency("h3vr.otherloader", BepInDependency.DependencyFlags.SoftDependency)]
     public sealed class Plugin : BaseUnityPlugin
@@ -62,7 +62,7 @@ namespace Gundomizer
                     prefix: new HarmonyMethod(typeof(Plugin), nameof(BeforeSelectedSpawn)));
                 harmony.Patch(AccessTools.Method(typeof(ItemSpawnerV2), "ExternalSpawnFromLaserToPoint"),
                     prefix: new HarmonyMethod(typeof(Plugin), nameof(BeforePortableSpawn)));
-                Logger.LogInfo("Gundomizer 1.0.0 loaded. Classic and tag viewer randomizer enabled.");
+                Logger.LogInfo("Gundomizer 1.0.1 loaded. Classic and tag viewer randomizer enabled.");
                 ConnectorIndex.Start(this);
                 try { PersistentConnectorIndex.Start(this); }
                 catch (Exception ex) { Logger.LogWarning("Persistent indexing unavailable; live search remains enabled: " + ex); }

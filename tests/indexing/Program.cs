@@ -11,8 +11,10 @@ static class Program
     static void Main(string[] args)
     {
         Policies();
+        BlockStreamChecks.Run();
+        SelectedFieldChecks.Run();
         if (args.Length == 2 && args[0] == "--worker") { WorkerChecks(args[1]); return; }
-        if (args.Length == 2 && args[0] == "--cancel") { CancelHelper(args[1]); return; }
+        if (args.Length == 2 && args[0] == "--cancel") { CancelReader(args[1]); return; }
         var types = new Dictionary<string, ConnectorKind> {
             { "FistVR.FVRFireArmAttachment", ConnectorKind.Attachment },
             { "FistVR.Suppressor", ConnectorKind.Attachment },
@@ -55,8 +57,7 @@ static class Program
         File.WriteAllText(Path.Combine(b, "manifest.json"), "version=1");
         Func<string> run = () =>
         {
-            using (var worker = new IndexWorker(cache, "game", plugins, new Dictionary<string, ConnectorKind>(), Console.WriteLine,
-                Path.GetFullPath("reader/bin/Release/net40/Gundomizer.Reader.exe")))
+            using (var worker = new IndexWorker(cache, "game", plugins, new Dictionary<string, ConnectorKind>(), Console.WriteLine))
             {
                 worker.Queue(sourceA); worker.Queue(sourceB);
                 var watch = Stopwatch.StartNew();
@@ -69,8 +70,7 @@ static class Program
         Check(first.Contains("rebuilt=2") && first.Contains("cacheHits=0") && first.Contains("skipped=0"), "cold worker builds both package entries: " + first);
         string warm = run();
         Check(warm.Contains("cacheHits=2") && warm.Contains("rebuilt=0") && warm.Contains("metadataBytes=0"), "warm worker uses both caches without deserializing bundle metadata: " + warm);
-        using (var worker = new IndexWorker(cache, "game", plugins, new Dictionary<string, ConnectorKind>(), Console.WriteLine,
-            Path.GetFullPath("reader/bin/Release/net40/Gundomizer.Reader.exe")))
+        using (var worker = new IndexWorker(cache, "game", plugins, new Dictionary<string, ConnectorKind>(), Console.WriteLine))
         {
             worker.Queue(sourceA); worker.Queue(sourceB);
             // Reset while work may be in flight; pre-reset results must not reappear.
@@ -78,11 +78,10 @@ static class Program
             var watch = Stopwatch.StartNew();
             while (!worker.Idle && watch.ElapsedMilliseconds < 20000) Thread.Sleep(10);
             Check(worker.Idle && worker.Status.Contains("rebuilt=2") && worker.Status.Contains("cacheHits=0"),
-                "reset serializes behind the active helper and rebuilds all known bundles: " + worker.Status);
+                "reset serializes behind the active reader and rebuilds all known bundles: " + worker.Status);
         }
         Check(run().Contains("cacheHits=2"), "reset rebuild is reused on the next launch");
-        using (var worker = new IndexWorker(cache, "game", plugins, new Dictionary<string, ConnectorKind>(), Console.WriteLine,
-            Path.GetFullPath("reader/bin/Release/net40/Gundomizer.Reader.exe")))
+        using (var worker = new IndexWorker(cache, "game", plugins, new Dictionary<string, ConnectorKind>(), Console.WriteLine))
         {
             worker.Reset();
             var watch = Stopwatch.StartNew();
@@ -100,8 +99,7 @@ static class Program
         Check(corrupt.Contains("cacheHits=1") && corrupt.Contains("rebuilt=1"), "corrupt package cache rebuilds independently: " + corrupt);
         var partial = new BundleFacts(); partial.Add("assets/known.prefab", new ConnectorFacts { Kind = ConnectorKind.Clip, Connector = 2 }); partial.Seal();
         IndexCache.Save(cacheA, IndexCache.Fingerprint(sourceA, "game", plugins, new ReadBudget(new ManualResetEvent(false), false)) + ":all", partial);
-        using (var worker = new IndexWorker(cache, "game", plugins, new Dictionary<string, ConnectorKind>(), Console.WriteLine,
-            Path.GetFullPath("reader/bin/Release/net40/Gundomizer.Reader.exe")))
+        using (var worker = new IndexWorker(cache, "game", plugins, new Dictionary<string, ConnectorKind>(), Console.WriteLine))
         {
             worker.Queue(sourceA); worker.Queue(sourceB);
             bool partialAvailable = false;
@@ -117,32 +115,24 @@ static class Program
         File.Delete(sourceA);
         string removed = run();
         Check(removed.Contains("bundles=1") && removed.Contains("cacheHits=1"), "removed source cannot serve an old disk cache: " + removed);
-        using (var worker = new IndexWorker(Path.Combine(root, "missing-reader-cache"), "game", plugins,
-            new Dictionary<string, ConnectorKind>(), Console.WriteLine, Path.Combine(root, "missing-reader.exe")))
-        {
-            worker.Queue(sourceB);
-            var watch = Stopwatch.StartNew();
-            while (!worker.Idle && watch.ElapsedMilliseconds < 5000) Thread.Sleep(10);
-            Check(worker.Idle && worker.Find(sourceB, "known") == null && worker.Status.Contains("skipped=1"), "missing helper leaves unresolved items on the live fallback");
-        }
         Console.WriteLine("Worker test artifacts: " + root);
     }
 
     static void CheckUnknown(ConnectorFacts fact) { if (fact != null) throw new Exception("Unknown item received fabricated connector data"); }
 
-    static void CancelHelper(string bundle)
+    static void CancelReader(string bundle)
     {
         string root = Path.Combine(Path.GetTempPath(), "Gundomizer-cancel-tests-" + Guid.NewGuid().ToString("N"));
         var stop = new ManualResetEvent(false);
         Exception failure = null;
-        var reader = new ExternalMetadataReader(Path.GetFullPath("reader/bin/Release/net40/Gundomizer.Reader.exe"), root,
+        var reader = new CachedMetadataReader(root,
             "game", root, new Dictionary<string, ConnectorKind>(), new ReadBudget(stop, true));
         var thread = new Thread(() => { try { reader.Read(bundle, null); } catch (Exception ex) { failure = ex; } });
         thread.Start();
         Thread.Sleep(250);
         stop.Set();
-        Check(thread.Join(5000) && failure is OperationCanceledException, "cancelling an active helper returns promptly without publishing partial data");
-        Check(Directory.GetDirectories(root, "reader-*").Length == 0, "cancelled helper job files are cleaned up");
+        Check(thread.Join(5000) && failure is OperationCanceledException, "cancelling an active reader returns promptly without publishing partial data");
+        Check(!Directory.Exists(root) || Directory.GetFiles(root, "*.gidx").Length == 0, "cancelled reader does not publish a cache entry");
     }
 
     static void Check(bool condition, string message)
@@ -196,6 +186,12 @@ static class Program
         bool cancelled = false;
         try { budget.Check(); } catch (OperationCanceledException) { cancelled = true; }
         Check(cancelled, "cancellation interrupts worker cooperatively");
+        var timed = new ReadBudget(new ManualResetEvent(false), false);
+        timed.BeginJob(1); Thread.Sleep(10);
+        bool expired = false;
+        try { timed.Check(); } catch (TimeoutException) { expired = true; }
+        Check(expired, "per-bundle deadline interrupts the reader cooperatively");
+        timed.BeginJob(); timed.Check();
         string resetDirectory = Path.Combine(root, "reset"); Directory.CreateDirectory(resetDirectory);
         string owned = Path.Combine(resetDirectory, IndexCache.Key(sourceA) + ".gidx");
         File.WriteAllText(owned, "cached");

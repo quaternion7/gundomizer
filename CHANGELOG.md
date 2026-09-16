@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.1 (unreleased)
+
+Move the metadata reader into the mod DLL, remove the external executable, reuse decompression buffers, and read only relevant fields to reduce allocation pressure. Existing persistent caches remain compatible.
+
 ## 1.0.0
 
 First public release: random items, compatible gear and ammo in Item Spawner V2 and its toolbox tablet, with optional auto-fill and persistent background indexing.

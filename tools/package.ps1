@@ -27,8 +27,6 @@ New-Item -ItemType Directory -Path $images -Force | Out-Null
 Copy-Item -LiteralPath (Join-Path $repoRoot 'docs\images\item-spawner.png') -Destination $images
 Copy-Item -LiteralPath $dll -Destination $stage
 Copy-Item -LiteralPath (Join-Path (Split-Path $dll) 'AssetsTools.NET.dll') -Destination $stage
-Copy-Item -LiteralPath (Join-Path (Split-Path $dll) 'Gundomizer.Reader.exe') -Destination $stage
-Copy-Item -LiteralPath (Join-Path (Split-Path $dll) 'Gundomizer.Reader.exe.config') -Destination $stage
 Copy-Item -LiteralPath (Join-Path $repoRoot 'THIRD-PARTY-NOTICES.md') -Destination $stage
 Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zip -Force
 Write-Host "Package: $zip"

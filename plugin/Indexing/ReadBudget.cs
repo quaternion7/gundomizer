@@ -11,12 +11,20 @@ namespace Gundomizer.Indexing
         private readonly ManualResetEvent stop;
         private readonly Stopwatch slice = Stopwatch.StartNew();
         private readonly Stopwatch io = Stopwatch.StartNew();
+        private readonly Stopwatch lifetime = Stopwatch.StartNew();
+        private long deadline;
         private long ioBytes;
         internal readonly bool Paced;
         internal ReadBudget(ManualResetEvent stop, bool paced) { this.stop = stop; Paced = paced; }
+        internal void BeginJob(int milliseconds = 300000)
+        {
+            if (milliseconds <= 0) throw new ArgumentOutOfRangeException("milliseconds");
+            deadline = lifetime.ElapsedMilliseconds + milliseconds;
+        }
         internal void Check(int bytes = 0)
         {
             if (stop.WaitOne(0, false)) throw new OperationCanceledException();
+            if (deadline != 0 && lifetime.ElapsedMilliseconds >= deadline) throw new TimeoutException("Metadata read exceeded its time budget");
             if (!Paced) return;
             ioBytes += bytes;
             if (slice.ElapsedMilliseconds >= 2)

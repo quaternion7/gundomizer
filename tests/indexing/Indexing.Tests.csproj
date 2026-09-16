@@ -3,6 +3,5 @@
   <ItemGroup>
     <Compile Include="../../plugin/Indexing/*.cs" Link="Indexing/%(Filename)%(Extension)" />
     <PackageReference Include="AssetsTools.NET" Version="3.0.5" />
-    <ProjectReference Include="../../reader/Gundomizer.Reader.csproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
   </ItemGroup>
 </Project>

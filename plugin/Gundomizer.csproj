@@ -3,7 +3,7 @@
     <AssemblyName>quaternion.gundomizer</AssemblyName>
     <RootNamespace>Gundomizer</RootNamespace>
     <AssemblyTitle>Gundomizer</AssemblyTitle>
-    <Version>1.0.0</Version>
+    <Version>1.0.1</Version>
     <Authors>quaternion</Authors>
     <Description>Random and held-item-compatible spawning in Item Spawner V2.</Description>
     <TargetFramework>net35</TargetFramework>
@@ -23,13 +23,6 @@
     <PackageReference Include="UnityEngine" Version="5.6.1" />
     <PackageReference Include="BepInEx.Core" Version="5.4.17" />
     <PackageReference Include="H3VR.GameLibs" Version="0.120.22" />
-    <Compile Remove="Indexing/BundleMetadataReader.cs" />
-    <ProjectReference Include="../reader/Gundomizer.Reader.csproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+    <PackageReference Include="AssetsTools.NET" Version="3.0.5" />
   </ItemGroup>
-  <Target Name="CopyMetadataReader" AfterTargets="Build">
-    <ItemGroup>
-      <ReaderFiles Include="../reader/bin/$(Configuration)/net40/Gundomizer.Reader.exe;../reader/bin/$(Configuration)/net40/Gundomizer.Reader.exe.config;../reader/bin/$(Configuration)/net40/AssetsTools.NET.dll" />
-    </ItemGroup>
-    <Copy SourceFiles="@(ReaderFiles)" DestinationFolder="$(TargetDir)" />
-  </Target>
 </Project>

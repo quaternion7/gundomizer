@@ -106,8 +106,7 @@ public static class IndexChecks
             {
                 worker = Activator.CreateInstance(type, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null,
                     new object[] { output, AccessTools.Field(type, "game").GetValue(live), AccessTools.Field(type, "plugins").GetValue(live),
-                        AccessTools.Field(type, "types").GetValue(live), new Action<string>(message => { }),
-                        AccessTools.Field(type, "readerExecutable").GetValue(live) }, null);
+                        AccessTools.Field(type, "types").GetValue(live), new Action<string>(message => { }) }, null);
                 foreach (DictionaryEntry pair in targets) AccessTools.Method(type, "Queue").Invoke(worker, new[] { pair.Key, pair.Value });
             }
             object measured = control ? live : worker;
@@ -117,7 +116,7 @@ public static class IndexChecks
             bool partial = false;
             frames.Reset();
             float started = Time.realtimeSinceStartup;
-            while (control ? Time.realtimeSinceStartup - started < 43
+            while (control ? Time.realtimeSinceStartup - started < 51
                 : !(bool)idle.GetValue(measured, null) && Time.realtimeSinceStartup - started < 180)
             {
                 foreach (DictionaryEntry pair in targets)
