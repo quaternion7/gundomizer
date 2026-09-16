@@ -112,7 +112,8 @@ public static class AmmoModChecks
 
         var plugin = BepInEx.Bootstrap.Chainloader.PluginInfos["quaternion.gundomizer"].Instance;
         var instant = (ConfigEntry<bool>)AccessTools.Field(plugin.GetType(), "SpawnItemInstantly").GetValue(null);
-        bool priorInstant = instant.Value, priorSave = plugin.Config.SaveOnConfigSet;
+        var autoFill = (ConfigEntry<bool>)AccessTools.Field(plugin.GetType(), "AutoFillHeldItem").GetValue(null);
+        bool priorInstant = instant.Value, priorFill = autoFill.Value, priorSave = plugin.Config.SaveOnConfigSet;
         var hands = GM.CurrentMovementManager.Hands;
         var heldField = AccessTools.Field(typeof(FVRViveHand), "m_currentInteractable");
         var priorHeld = hands.Select(h => h.CurrentInteractable).ToArray();
@@ -124,21 +125,39 @@ public static class AmmoModChecks
         plugin.Config.SaveOnConfigSet = false;
         try
         {
+            autoFill.Value = true;
             foreach (var hand in hands) { hand.enabled = false; heldField.SetValue(hand, null); }
             GM.CurrentPlayerBody.Head.position = spawner.transform.position + Vector3.back;
             spawner.BTN_SetPageMode(2); spawner.BTN_SimpleMode_SwitchToTagSearch(); spawner.BTN_Tag_ClearSelectedTags();
             foreach (var group in rounds.GroupBy(r => r.Type))
             {
-                var gun = sources.Where(o => !o.IsModContent && o.Category == FVRObject.ObjectCategory.Firearm && o.UsesRoundTypeFlag && o.RoundType == group.Key)
-                    .OrderBy(o => o.ItemID, StringComparer.Ordinal).FirstOrDefault();
-                Check(gun != null, "native held firearm fixture exists for " + group.Key, log);
-                var load = gun.GetGameObjectAsync();
-                float deadline = Time.realtimeSinceStartup + 90;
-                while (!load.IsCompleted && Time.realtimeSinceStartup < deadline) yield return null;
-                Check(load.IsCompleted && load.Result != null, "held firearm loaded: " + gun.ItemID, log);
-                var held = Object.Instantiate(load.Result, spawner.transform.position + Vector3.up, Quaternion.identity);
-                spawned.Add(held);
-                foreach (var rb in held.GetComponentsInChildren<Rigidbody>()) rb.isKinematic = true;
+                var gunChoices = sources.Where(o => !o.IsModContent && o.Category == FVRObject.ObjectCategory.Firearm
+                    && o.UsesRoundTypeFlag && o.RoundType == group.Key).OrderBy(o => o.ItemID, StringComparer.Ordinal).ToArray();
+                Check(gunChoices.Length > 0, "native held firearm fixture exists for " + group.Key, log);
+                FVRObject gun = null;
+                GameObject held = null;
+                float deadline;
+                foreach (var candidate in gunChoices)
+                {
+                    var load = candidate.GetGameObjectAsync();
+                    deadline = Time.realtimeSinceStartup + 90;
+                    while (!load.IsCompleted && Time.realtimeSinceStartup < deadline) yield return null;
+                    Check(load.IsCompleted && load.Result != null, "held firearm loaded: " + candidate.ItemID, log);
+                    var instance = Object.Instantiate(load.Result, spawner.transform.position + Vector3.up, Quaternion.identity);
+                    spawned.Add(instance);
+                    foreach (var rb in instance.GetComponentsInChildren<Rigidbody>()) rb.isKinematic = true;
+                    yield return null;
+                    // Some native weapons (AMagII in this build) declare one caliber on
+                    // the gun and a different one on their chamber. Keep production's exact
+                    // check and use a fixture
+                    // with a declared matching chamber for the positive refill assertion.
+                    var fa = instance.GetComponent<FVRFireArm>();
+                    if (fa != null && fa.GetChambers().Any(c => c != null && c.RoundType == group.Key))
+                    { gun = candidate; held = instance; break; }
+                    log("FILL FIXTURE SKIPPED " + candidate.ItemID + ": no chamber declares " + group.Key);
+                    Object.Destroy(instance); yield return null;
+                }
+                Check(held != null, "held firearm has a chamber declaring " + group.Key, log);
                 heldField.SetValue(hands[0], held.GetComponent<FVRPhysicalObject>());
                 yield return null; // Native Start may finish chamber initialization.
                 Call(controller, "RefreshHeldItem", new object[] { null });
@@ -200,6 +219,9 @@ public static class AmmoModChecks
                             && ((FVRFireArmRound)added[0]).RoundType == round.Type && ((FVRFireArmRound)added[0]).RoundClass == round.Class
                             && added[0].ObjectWrapper != null && added[0].ObjectWrapper.ItemID == round.Data.ObjectID.ItemID,
                             (immediate ? "instant" : "native accept") + " spawns exactly one correct round: " + round.Data.Name, log);
+                        var matchingChambers = actualGun.GetChambers().Where(c => c != null && c.RoundType == round.Type).ToArray();
+                        Check(matchingChambers.Length > 0 && matchingChambers.All(c => c.IsFull && !c.IsSpent
+                            && c.GetRound().RoundClass == round.Class), "held gun chambers filled with " + round.Data.Name, log);
                         foreach (var item in added) Object.Destroy(item.gameObject);
                         yield return null;
                     }
@@ -210,7 +232,7 @@ public static class AmmoModChecks
         finally
         {
             foreach (var pair in exclusions) Call(selection, "Set", pair.Key, pair.Value);
-            instant.Value = priorInstant; plugin.Config.SaveOnConfigSet = priorSave;
+            instant.Value = priorInstant; autoFill.Value = priorFill; plugin.Config.SaveOnConfigSet = priorSave;
             for (int i = 0; i < hands.Length; ++i) { heldField.SetValue(hands[i], priorHeld[i]); hands[i].enabled = priorEnabled[i]; }
             GM.CurrentPlayerBody.Head.position = priorHead;
             foreach (var obj in spawned) if (obj != null) Object.Destroy(obj);

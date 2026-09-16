@@ -26,7 +26,7 @@ public static class RuntimeSuite
 
     public static IEnumerator Run(string directory, Action<string> log)
     {
-        if (File.Exists(Path.Combine(directory, "ammo-mod-checks.txt")))
+        if (File.Exists(Path.Combine(directory, "ammo-mod-checks.txt")) || File.Exists(Path.Combine(directory, "ammo-fill-checks.txt")))
         {
             var setup = AmmoModChecks.Prepare(directory, log);
             try { while (setup.MoveNext()) yield return setup.Current; }
@@ -60,6 +60,13 @@ public static class RuntimeSuite
         Check(spawner != null, "live native ItemSpawnerV2 exists", log);
         var controller = spawner.GetComponents<MonoBehaviour>().FirstOrDefault(c => c.GetType().FullName == "Gundomizer.RandomizerController");
         Check(controller != null && controller.enabled, "Gundomizer attached and initialized", log);
+        if (File.Exists(Path.Combine(directory, "ammo-fill-checks.txt")))
+        {
+            var checks = AmmoFillChecks.Run(spawner, controller, directory, log);
+            try { while (checks.MoveNext()) yield return checks.Current; }
+            finally { (checks as IDisposable).Dispose(); }
+            yield break;
+        }
         if (File.Exists(Path.Combine(directory, "ammo-mod-checks.txt")))
         {
             if (File.Exists(Path.Combine(directory, "index-checks.txt")))

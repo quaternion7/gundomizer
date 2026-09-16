@@ -19,7 +19,7 @@ try {
     foreach ($field in @('PMode','SMode','m_displayLevel','m_curTagGroup','m_selectedTags','WorkingItemIDs','m_curSmallPos','m_selectedID')) {
         if (-not ($spawner.Fields | Where-Object Name -EQ $field)) { throw "Missing spawner field: $field" }
     }
-    foreach ($method in @('Start','RedrawSimpleCanvas','RedrawListCanvas','AddToSelectionQueue','SetSelectedID','RedrawDetailsCanvas','IncrementSpawnedGuns','BTN_Details_Spawn')) {
+    foreach ($method in @('Start','RedrawSimpleCanvas','RedrawListCanvas','AddToSelectionQueue','SetSelectedID','RedrawDetailsCanvas','IncrementSpawnedGuns','BTN_Details_Spawn','ExternalSpawnFromLaserToPoint')) {
         if (-not ($spawner.Methods | Where-Object Name -EQ $method)) { throw "Missing spawner method: $method" }
     }
     $checked = 0

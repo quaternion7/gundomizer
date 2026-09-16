@@ -8,7 +8,8 @@ param(
     [switch]$IntegrationOnly,
     [switch]$IndexChecks,
     [switch]$ColdIndexChecks,
-    [switch]$AmmoModChecks
+    [switch]$AmmoModChecks,
+    [switch]$AmmoFillChecks
 )
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
@@ -43,6 +44,7 @@ if ($Action -eq 'Start') {
         ConvertTo-Json | Set-Content -LiteralPath (Join-Path $RunDirectory 'session.json')
     Build-Suite $RunDirectory
     if ($AmmoModChecks) { [IO.File]::WriteAllText((Join-Path $RunDirectory 'ammo-mod-checks.txt'), 'enabled') }
+    if ($AmmoFillChecks) { [IO.File]::WriteAllText((Join-Path $RunDirectory 'ammo-fill-checks.txt'), 'enabled') }
     if ($MeasureMods -or $IntegrationOnly) { [IO.File]::WriteAllText((Join-Path $RunDirectory 'measure-mods.txt'), 'enabled') }
     if ($IntegrationOnly) { [IO.File]::WriteAllText((Join-Path $RunDirectory 'integration-only.txt'), 'enabled') }
     if ($IndexChecks -or $ColdIndexChecks) { [IO.File]::WriteAllText((Join-Path $RunDirectory 'index-checks.txt'), 'enabled') }
@@ -69,6 +71,9 @@ if ($Action -eq 'Run') {
     if ($game.Count -ne 1) { throw 'The matching test session is not running.' }
     Build-Suite $RunDirectory
     $ammoMarker = Join-Path $RunDirectory 'ammo-mod-checks.txt'
+    $fillMarker = Join-Path $RunDirectory 'ammo-fill-checks.txt'
+    if ($AmmoFillChecks) { [IO.File]::WriteAllText($fillMarker, 'enabled') }
+    elseif (Test-Path -LiteralPath $fillMarker) { Remove-Item -LiteralPath $fillMarker }
     if ($AmmoModChecks) { [IO.File]::WriteAllText($ammoMarker, 'enabled') }
     elseif (Test-Path -LiteralPath $ammoMarker) { Remove-Item -LiteralPath $ammoMarker }
     $marker = Join-Path $RunDirectory 'measure-mods.txt'

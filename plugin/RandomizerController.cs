@@ -33,6 +33,7 @@ namespace Gundomizer
         private string cachedHeldName = "none";
         private readonly System.Random random = new System.Random();
         private readonly HashSet<string> loggedFailures = new HashSet<string>();
+        private readonly HashSet<string> ammoSelections = new HashSet<string>();
         private PendingSearch pendingSearch;
         private sealed class PendingSearch
         {
@@ -167,14 +168,14 @@ namespace Gundomizer
             status = "Choosing compatible ammo...";
             nextClick = Time.unscaledTime + 0.3f;
             StartCoroutine(GuardedRoll(true, cachedHeldItem, hand, Plugin.SpawnItemInstantly.Value,
-                variants, AmmoSelection.Shared.Revision));
+                variants, AmmoSelection.Shared.Revision, Plugin.AutoFillHeldItem.Value));
         }
 
         private IEnumerator GuardedRoll(bool compatible, FVRPhysicalObject held, FVRViveHand hand, bool spawnInstantly,
-            List<AmmoCatalog.Variant> ammo = null, int ammoRevision = -1)
+            List<AmmoCatalog.Variant> ammo = null, int ammoRevision = -1, bool autoFill = false)
         {
             var metrics = new RollMetrics { Kind = ammo != null ? "Ammo" : compatible ? "Compatible" : "Random" };
-            return Guarded(Roll(compatible, held, hand, spawnInstantly, metrics, ammo, ammoRevision), metrics);
+            return Guarded(Roll(compatible, held, hand, spawnInstantly, metrics, ammo, ammoRevision, autoFill), metrics);
         }
 
         private IEnumerator Guarded(IEnumerator roll, RollMetrics metrics)
@@ -210,7 +211,11 @@ namespace Gundomizer
 
         internal bool SpawnManagedSelection() => SpawnManagedSelection(bridge.SelectedId);
 
-        internal bool SpawnManagedSelection(string id)
+        internal bool SpawnManagedSelection(string id) => RequestSelected(id, null);
+
+        internal bool SpawnManagedSelectionAtPoint(Vector3 point) => RequestSelected(bridge.SelectedId, point);
+
+        private bool RequestSelected(string id, Vector3? targetPoint)
         {
             if (!Visible || !bridge.IsManagedSelection(id)) return false;
             if (busy) return true;
@@ -220,11 +225,17 @@ namespace Gundomizer
             busy = true;
             status = "Loading " + entry.DisplayName + "...";
             var metrics = new RollMetrics { Kind = "Native selection" };
-            StartCoroutine(Guarded(SpawnSelected(entry, metrics), metrics));
+            FVRPhysicalObject fillTarget = null;
+            if (Plugin.AutoFillHeldItem.Value && ammoSelections.Contains(id))
+            {
+                RefreshHeldItem();
+                fillTarget = cachedHeldItem;
+            }
+            StartCoroutine(Guarded(SpawnSelected(entry, metrics, fillTarget, targetPoint), metrics));
             return true;
         }
 
-        private IEnumerator SpawnSelected(ItemSpawnerID entry, RollMetrics metrics)
+        private IEnumerator SpawnSelected(ItemSpawnerID entry, RollMetrics metrics, FVRPhysicalObject fillTarget, Vector3? targetPoint)
         {
             // Accepting a roll with native Spawn retains its main + SecondObject behavior.
             // Gather the requested prefabs first, so a timeout cannot leave half a native set.
@@ -258,15 +269,19 @@ namespace Gundomizer
                 ConnectorIndex.Observe(source, prefab);
                 prefabs.Add(prefab);
             }
+            string fillMessage = "";
             for (int i = 0; i < prefabs.Count; ++i)
             {
                 var point = i == 0 ? bridge.SpawnPoint(entry) : bridge.SmallSpawnPoint();
-                if (point == null) { Message("This spawner has no spawn pad for this item."); yield break; }
-                var position = point.position;
+                if (!targetPoint.HasValue && point == null) { Message("This spawner has no spawn pad for this item."); yield break; }
+                // The toolbox tablet accepts selected items at the stylus's ray hit, with
+                // native vertical offsets for bundled items, rather than advancing its pads.
+                var position = targetPoint.HasValue ? targetPoint.Value + (i == 0 ? Vector3.zero : Vector3.up * (i + 1)) : point.position;
+                var rotation = targetPoint.HasValue ? Quaternion.identity : point.rotation;
                 if (i == 0 && (entry.UsesLargeSpawnPad || entry.UsesHugeSpawnPad)) position += Vector3.up * .2f;
                 GameObject spawned;
                 string problem;
-                if (!SpawnTransaction.TrySpawn(prefabs[i], position, point.rotation, entry, out spawned, out problem))
+                if (!SpawnTransaction.TrySpawn(prefabs[i], position, rotation, entry, out spawned, out problem))
                 {
                     metrics.Outcome = "initialization failed";
                     Plugin.Log.LogError("Could not initialize " + sources[i].ItemID + "; removed the failed instance. " + problem);
@@ -274,15 +289,16 @@ namespace Gundomizer
                         : "Main item spawned; a bundled item failed and was removed. See the log.");
                     yield break;
                 }
-                bridge.RecordSpawn(entry, i == 0);
+                bridge.RecordSpawn(entry, i == 0, !targetPoint.HasValue);
+                if (i == 0) fillMessage = FillSpawnedAmmo(spawned, fillTarget, null);
             }
             metrics.Outcome = "spawned";
             spawner.Boop(1);
-            Message("Spawned " + entry.DisplayName);
+            Message("Spawned " + entry.DisplayName + fillMessage);
         }
 
         private IEnumerator Roll(bool compatible, FVRPhysicalObject held, FVRViveHand hand, bool spawnInstantly,
-            RollMetrics metrics, List<AmmoCatalog.Variant> ammo, int ammoRevision)
+            RollMetrics metrics, List<AmmoCatalog.Variant> ammo, int ammoRevision, bool autoFill)
         {
             var context = ammo == null ? bridge.CaptureContext() : null;
             var variants = new Dictionary<string, AmmoCatalog.Variant>(StringComparer.Ordinal);
@@ -346,7 +362,7 @@ namespace Gundomizer
                 // weapon just to put its existing artwork/name into the details panel.
                 if (!compatible && !spawnInstantly)
                 {
-                    bridge.SelectEntry(entry);
+                    SelectEntry(entry, false);
                     metrics.Outcome = "selected";
                     spawner.Boop(0);
                     Message("Selected " + entry.DisplayName + ".");
@@ -416,7 +432,7 @@ namespace Gundomizer
                     if (ammo != null ? !AmmoCatalog.Matches(held, prefab, variants[entry.ItemID]) : compatible && !Compatibility.Matches(held, prefab)) continue;
                     if (!spawnInstantly)
                     {
-                        bridge.SelectEntry(entry);
+                        SelectEntry(entry, ammo != null);
                         metrics.Outcome = "selected";
                         spawner.Boop(0);
                         Plugin.Log.LogInfo("Selected " + entry.ItemID + (compatible ? " compatible with " + Compatibility.Name(held) : ""));
@@ -431,7 +447,7 @@ namespace Gundomizer
                     }
                     var position = point.position;
                     if (entry.UsesLargeSpawnPad || entry.UsesHugeSpawnPad) position += Vector3.up * 0.2f;
-                    bridge.SelectEntry(entry);
+                    SelectEntry(entry, ammo != null);
                     GameObject spawned;
                     string problem;
                     if (!SpawnTransaction.TrySpawn(prefab, position, point.rotation, entry, out spawned, out problem))
@@ -445,7 +461,7 @@ namespace Gundomizer
                     metrics.Outcome = "spawned";
                     spawner.Boop(1);
                     Plugin.Log.LogInfo("Spawned " + entry.ItemID + (compatible ? " compatible with " + Compatibility.Name(held) : ""));
-                    Message("Spawned " + entry.DisplayName);
+                    Message("Spawned " + entry.DisplayName + FillSpawnedAmmo(spawned, autoFill ? held : null, hand));
                     yield break;
                 }
                 if (++inspected % 8 == 0) yield return null;
@@ -499,6 +515,25 @@ namespace Gundomizer
         private void LogSkipped(ItemSpawnerID entry, Exception ex)
         {
             if (loggedFailures.Add(entry.ItemID)) Plugin.Log.LogWarning("Skipped " + entry.ItemID + ": " + ex.Message);
+        }
+
+        private void SelectEntry(ItemSpawnerID entry, bool ammo)
+        {
+            bridge.SelectEntry(entry);
+            if (ammo) ammoSelections.Add(bridge.SelectedId);
+            else ammoSelections.Remove(bridge.SelectedId);
+        }
+
+        private string FillSpawnedAmmo(GameObject spawned, FVRPhysicalObject target, FVRViveHand hand)
+        {
+            if (target == null || spawned == null) return "";
+            var round = spawned.GetComponent<FVRFireArmRound>();
+            if (round == null) return "";
+            RefreshHeldItem(hand);
+            if (!playerNearby || cachedHeldItem != target) return "";
+            var fill = AmmoFill.Apply(target, round);
+            if (fill.Failed > 0) return ". Some ammo could not be filled. See the log.";
+            return fill.Filled > 0 ? ". Filled " + Compatibility.Name(target) + "." : "";
         }
 
         private void Message(string message)

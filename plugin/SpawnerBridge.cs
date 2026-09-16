@@ -144,10 +144,10 @@ namespace Gundomizer
             return spawner.SpawnPoints_Small[index];
         }
 
-        internal void RecordSpawn(ItemSpawnerID entry, bool countFirearm = true)
+        internal void RecordSpawn(ItemSpawnerID entry, bool countFirearm = true, bool advancePad = true)
         {
             int count = spawner.SpawnPoints_Small == null ? 0 : spawner.SpawnPoints_Small.Count;
-            if (count > 0) SmallPosition.SetValue(spawner, ((int)SmallPosition.GetValue(spawner) + 1) % count);
+            if (advancePad && count > 0) SmallPosition.SetValue(spawner, ((int)SmallPosition.GetValue(spawner) + 1) % count);
             if (countFirearm && entry.MainObject.Category == FVRObject.ObjectCategory.Firearm) CountGun.Invoke(spawner, null);
         }
     }

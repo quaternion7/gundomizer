@@ -7,13 +7,14 @@ using HarmonyLib;
 
 namespace Gundomizer
 {
-    [BepInPlugin("quaternion.gundomizer", "Gundomizer", "0.1.12")]
+    [BepInPlugin("quaternion.gundomizer", "Gundomizer", "0.1.13")]
     [BepInProcess("h3vr.exe")]
     [BepInDependency("h3vr.otherloader", BepInDependency.DependencyFlags.SoftDependency)]
     public sealed class Plugin : BaseUnityPlugin
     {
         internal static ManualLogSource Log;
         internal static ConfigEntry<bool> SpawnItemInstantly;
+        internal static ConfigEntry<bool> AutoFillHeldItem;
         internal static ConfigEntry<int> MaxNewLoads;
         internal static ConfigEntry<float> SearchSeconds;
         internal static ConfigEntry<bool> PersistentIndex;
@@ -28,6 +29,10 @@ namespace Gundomizer
                 SpawnItemInstantly = Config.Bind("General", "Spawn Item Instantly", true,
                     "Enabled: spawns the item when you click the button. " +
                     "Disabled: select the random item, use the spawner's Spawn button to spawn it.");
+                AutoFillHeldItem = Config.Bind("General", "Auto Fill Held Item", true,
+                    "After spawning randomized ammo, replace existing rounds and fill the held magazine or weapon to capacity with that ammo. " +
+                    "Also fills matching clips, speedloaders, and installed weapon magazines/chambers. The loose round still spawns. " +
+                    "In selection mode, filling happens only when you press Spawn. Missing magazines are not created.");
                 MaxNewLoads = Config.Bind("Performance", "New Prefab Loads Per Click", 8,
                     new ConfigDescription("Pause a search after this many new prefab requests. Click the same button to continue the same shuffled search. " +
                     "Lower values limit speculative loading with large mod collections; one prefab can still require a large bundle.", new AcceptableValueRange<int>(1, 64)));
@@ -53,7 +58,9 @@ namespace Gundomizer
                         prefix: new HarmonyMethod(typeof(Plugin), nameof(BeforeOtherLoaderSpawn)));
                 else harmony.Patch(AccessTools.Method(typeof(ItemSpawnerV2), "BTN_Details_Spawn"),
                     prefix: new HarmonyMethod(typeof(Plugin), nameof(BeforeSelectedSpawn)));
-                Logger.LogInfo("Gundomizer 0.1.12 loaded. Classic and tag viewer randomizer enabled.");
+                harmony.Patch(AccessTools.Method(typeof(ItemSpawnerV2), "ExternalSpawnFromLaserToPoint"),
+                    prefix: new HarmonyMethod(typeof(Plugin), nameof(BeforePortableSpawn)));
+                Logger.LogInfo("Gundomizer 0.1.13 loaded. Classic and tag viewer randomizer enabled.");
                 ConnectorIndex.Start(this);
                 try { PersistentConnectorIndex.Start(this); }
                 catch (Exception ex) { Logger.LogWarning("Persistent indexing unavailable; live search remains enabled: " + ex); }
@@ -107,6 +114,12 @@ namespace Gundomizer
         {
             var controller = __instance.GetComponent<RandomizerController>();
             return controller == null || !controller.enabled || !controller.SpawnManagedSelection(___m_selectedID);
+        }
+
+        private static bool BeforePortableSpawn(ItemSpawnerV2 __instance, UnityEngine.Vector3 __0)
+        {
+            var controller = __instance.GetComponent<RandomizerController>();
+            return controller == null || !controller.enabled || !controller.SpawnManagedSelectionAtPoint(__0);
         }
 
         private static bool BeforeOtherLoaderSpawn(ItemSpawnerV2 __0, ref bool __result)

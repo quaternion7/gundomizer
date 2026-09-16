@@ -1,6 +1,6 @@
 # Gundomizer
 
-Gundomizer adds compact, rounded icon buttons with a shaded sliding rainbow gradient to the bottom-left of H3VR's **Item Spawner V2**, in classic and tag-search modes:
+Gundomizer adds compact, rounded icon buttons with a shaded sliding rainbow gradient to the bottom-left of H3VR's **Item Spawner V2**, including the **tablet version from the toolbox**, in classic and tag-search modes:
 
 - **Dice (Randomizer)** spawns one random item from the current section, across all pages. At the category overview, it includes all subcategories; inside a subcategory, it stays within that subcategory.
 - **Gun + hand (Compatible)** does the same, filtered by the object in your non-pointing hand. Hold a firearm and browse magazines, clips, speedloaders, or attachments. Installed rail adapters and attachment mounts are included. The button is gray when nothing is held.
@@ -10,7 +10,20 @@ In tag-search mode, the dice and gun/hand buttons use the native results matchin
 
 Hover a button for its tooltip. Items spawn on the spawner's native pads and become the selected entry in the details panel. The buttons spawn **one main object**, without bundled secondary items or the stock random gun's attachment pile. Accepting a selection with native **Spawn** includes any bundled secondary item.
 
-**Version 0.1.11 is a local prototype.** Searches limit new prefab loads and can resume after pausing. A persistent background index reads connector metadata without loading Unity assets and reuses unchanged package caches on later launches. Buttons use completed index data immediately and retain live checks for unresolved items. See [the completion roadmap](docs/roadmap.md).
+On the toolbox tablet, use its native **stylus placement** to accept a selected item. Ammo filling also runs after successful stylus placement.
+
+**Version 0.1.13 is a local development build.**
+
+## Roadmap / progress
+
+- [x] **Working prototype** — tested random and compatible buttons in the native panel.
+- [x] **Faster compatible search** — reuse native results, limit new loads, and resume paused searches.
+- [x] **Lightweight async indexing** — persistent startup index; rebuild changed packages and keep live fallback.
+- [x] **Ammo randomizer** — held-caliber rolls, variant toggles, selection mode, and optional automatic filling.
+- [x] **General spawn safety** — generic preview for missing icons and cleanup after failed initialization.
+- [x] **Tag-search mode** — use selected tags across all pages, with OtherLoader support.
+
+## Mod compatibility
 
 When OtherLoader is installed, Gundomizer uses its object IDs, classic category tree, unlock state, and bundled spawn list. This keeps native and modded items in the same browser pool. The optional integration was tested with OtherLoader 1.3.7, Modul PM, Modul XM8, G36 Extras, and FN F2000; see [the measurements and remaining loading costs](docs/modded-profile-measurements.md).
 
@@ -44,7 +57,7 @@ dotnet run --project .\tests\Gundomizer.Tests.csproj -c Release
 The default deployment profile is **Development**. The deployment script creates the local ZIP, backs up this mod's prior files and the profile registry, installs only Gundomizer, and verifies the installed DLL hash. If r2modman was already displaying the profile, reselect it to refresh the mod list.
 
 Build output: `plugin/bin/Release/net35/quaternion.gundomizer.dll`.
-Local package: `artifacts/quaternion-Gundomizer-0.1.12.zip`.
+Local package: `artifacts/quaternion-Gundomizer-0.1.13.zip`.
 
 Please test category overview versus subcategory rolls, empty hands, magazine fit, an installed Picatinny adapter, occupied attachment mounts, hover tooltips, rapid clicks, and changing hands while an asset loads. See [the prototype plan](docs/extension-plan.md) for the full acceptance checklist.
 
@@ -52,22 +65,30 @@ For performance testing, compare the first compatible roll with subsequent rolls
 
 An opt-in [runtime test harness](docs/runtime-testing.md) can launch the dev profile without VR, exercise the real spawner, simulate held-object state, and capture panel images and timings. Its DLL is excluded from the release package.
 
-For large mod collections, **Performance > New Prefab Loads Per Click** defaults to 8 and **Search Seconds Per Click** to 10 seconds. At either limit the search pauses; click the same button to continue its original shuffled order. Paused searches expire after one minute or restart when their filters, held assembly, ammo choices, or spawn setting change. A pause is not an empty compatibility result. Cancelled native loads can continue in the background; Gundomizer permits only one outstanding load that it initiated. One chosen prefab can still require a large bundle, and Unity's asset-loading work itself is outside this mod's frame budget.
+## Optimization
 
-## Settings
+Compatibility searches can be expensive with large mod collections: loading a candidate prefab through Unity may bring in a large asset bundle, including textures and other media. Gundomizer instead reads the serialized **connector metadata** needed to reject incompatible attachments, magazines, and clips. It does not instantiate those assets or load their textures into Unity just to index them. The held object's current mounts and the game's native fitting rules still decide the final match.
+
+A low-priority helper builds a **persistent metadata index asynchronously from startup**, with paced work and reads limited to approximately 8 MiB/s. Keeping parsing outside Unity also avoids adding that allocation pressure to the game's garbage collector. Completed results become available while you play; unindexed or unsupported items keep the bounded live checks. Package/version and bundle fingerprints let subsequent launches reuse the cache and rebuild only affected bundles. This reduces speculative prefab loads and makes compatible rolls faster as indexing completes; see [measured results](docs/persistent-index-measurements.md).
+
+The cache survives restarts in **`BepInEx/cache/Gundomizer` inside your active profile**. The reset option below discards and rebuilds it. See [index behavior and limits](docs/persistent-index.md) for details.
+
+Searches pause at the configured load/time limits; click the same button to continue the original shuffled search. Paused searches expire after one minute or restart when their context changes. A selected item can still require its full bundle, and a native load already underway can continue after cancellation. Gundomizer permits only one outstanding load that it initiated.
+
+## Mod Options
 
 In r2modman's Config Editor, open `BepInEx/config/quaternion.gundomizer.cfg`. The plugin creates this file on its first launch.
 
-**Performance > Persistent Connector Index** defaults to **true**. The low-priority reader starts with the game and limits its reads to approximately 8 MiB/s. A bundled Windows .NET 4 helper keeps parsing and fingerprint hashing outside Unity's garbage collector. Package/version and bundle fingerprints keep unchanged caches reusable. Cached data lives in `BepInEx/cache/Gundomizer`; it can be removed while the game is closed to rebuild it. Unsupported serialization or custom root scripts keep the normal live checks. Logs show indexing progress. Restart after changing this setting; see [index behavior and limits](docs/persistent-index.md).
+| Section | Option | Default | What it does |
+| --- | --- | --- | --- |
+| General | **Spawn Item Instantly** | On | All three roll buttons spawn immediately. Off: select the result first, then use native Spawn to accept it or roll again. |
+| General | **Auto Fill Held Item** | On | After an ammo roll spawns, replace existing rounds and fill matching magazines/chambers on the held item. The loose round still spawns. In selection mode, filling waits until Spawn. |
+| Performance | **New Prefab Loads Per Click** | 8 | Pause after this many new prefab requests (1–64). Click again to continue. |
+| Performance | **Search Seconds Per Click** | 10 | Pause after this many seconds (1–60). A shared load already started can finish in the background. |
+| Performance | **Persistent Connector Index** | On | Build/reuse the background metadata cache. Restart after changing this option. |
+| Performance | **Reset Metadata Indexing** | Off | Clear saved metadata once, rebuild in the background, and switch itself back off. If indexing is disabled, only clear the cache. |
 
-**Performance > Reset Metadata Indexing** defaults to **false**. Set true to clear Gundomizer's saved connector facts and rebuild them in the background. It runs once and saves itself back to false. Use an in-game config manager, or edit the file while the game is closed and launch. Live compatibility checks remain available while rebuilding. With persistent indexing disabled, it only clears the cache.
-
-**General > Spawn Item Instantly** defaults to **true** and applies to all three roll buttons:
-
-- **true:** immediately spawn one main item and select its entry, as before.
-- **false:** only select the random entry in the native details panel and history. Use the native **Spawn** button to accept it, or click a randomizer button again to reroll. No object is created and no spawn pad or firearm counter advances during selection.
-
-Both modes keep the same section scope and compatibility checks. Each roll uses the setting from when it was clicked. Edit the config while H3VR is closed, then launch the game. Accepting a selection with native Spawn includes any bundled secondary items and applies initialization-failure cleanup.
+Use an in-game config manager, or edit the file with H3VR closed and launch. Choosing a result without spawning never changes the held item's ammunition.
 
 ## Ammo choices
 
@@ -77,12 +98,15 @@ The popup uses native ammo names and shows native property tags such as incendia
 
 Mods can register ammo for the ammo station/T&H without supplying standalone spawner entries. Gundomizer gives those registered rounds temporary native details entries, using a generic preview where needed, so both instant spawning and selection followed by native Spawn work. These entries do not add browser categories or saved favorites. See [tested ammo packs and the local Bubba loader repair](docs/ammo-mod-compatibility.md).
 
-Only unlocked variants with an exact native item-spawner entry are listed, so selection mode never silently substitutes another round. Custom ammo missing that registration is currently omitted. The native tag pager is shifted slightly right to leave room for the ammo group without reducing its text or hit targets.
+With **Auto Fill Held Item** enabled, a successful ammo spawn replaces loaded rounds and fills matching magazines, clips, speedloaders, and weapon chambers. This includes existing inserted/integrated magazines and installed weapons of the rolled caliber; other calibers stay unchanged. It does not create a missing magazine, attach a belt, or consume the loose round. If you change held items while loading, the old target is not filled. Chambers whose declared caliber differs from the rolled round are skipped. Custom loading mechanisms outside these native components may need separate support.
+
+Available entries retain their unlock rules, and the selected round must match the exact registered ammo variant. The native tag pager is shifted slightly right to leave room for the ammo group without reducing its text or hit targets.
 
 ## Research and development
 
 - [Current scope and original requester background](docs/scope.md)
 - [Roadmap and progress checklist](docs/roadmap.md)
+- [Visible strings and templates for review](docs/visible-strings.md)
 - [Original code findings and source map](docs/item-spawner-v2-analysis.md)
 - [Current prototype behavior and validation](docs/extension-plan.md)
 - [Research provenance](docs/research-baseline.md)

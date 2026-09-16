@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.13 — automatic ammo filling and documentation
+
+- Add **General > Auto Fill Held Item** (default on). Successful ammo rolls still spawn a loose round, then replace existing rounds and fill matching held magazines, weapon magazines/chambers, clips, and speedloaders. Selection-only rolls wait for native Spawn; a changed held target is not filled.
+- Document all six mod options, toolbox tablet usage, the compact progress checklist, and background index optimization. Correct the obsolete restriction on mod ammo without standalone spawner entries.
+- Add a reviewable catalog of visible strings/templates and real-game refill checks.
+- Route the toolbox tablet's acceptance of Gundomizer selections through the same spawn cleanup and ammo-fill handling, preserving the native stylus placement point.
+
 ## 0.1.12 — metadata reset and modded ammo IDs
 
 - Add **Performance > Reset Metadata Indexing** (default off). Clear saved facts and rebuild in the background; automatically save the setting back to off. Discard results from an in-flight pre-reset helper safely.
