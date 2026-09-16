@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.0.1 (unreleased)
+## 1.0.1
 
 Move the metadata reader into the mod DLL, remove the external executable, reuse decompression buffers, and read only relevant fields to reduce allocation pressure. Existing persistent caches remain compatible.
 
