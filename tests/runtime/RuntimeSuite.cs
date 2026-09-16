@@ -26,6 +26,12 @@ public static class RuntimeSuite
 
     public static IEnumerator Run(string directory, Action<string> log)
     {
+        if (File.Exists(Path.Combine(directory, "ammo-mod-checks.txt")))
+        {
+            var setup = AmmoModChecks.Prepare(directory, log);
+            try { while (setup.MoveNext()) yield return setup.Current; }
+            finally { (setup as IDisposable).Dispose(); }
+        }
         foreach (var pair in AM.STypeDic[FireArmRoundType.a9_19_Parabellum])
         {
             var obj = pair.Value.ObjectID;
@@ -54,6 +60,19 @@ public static class RuntimeSuite
         Check(spawner != null, "live native ItemSpawnerV2 exists", log);
         var controller = spawner.GetComponents<MonoBehaviour>().FirstOrDefault(c => c.GetType().FullName == "Gundomizer.RandomizerController");
         Check(controller != null && controller.enabled, "Gundomizer attached and initialized", log);
+        if (File.Exists(Path.Combine(directory, "ammo-mod-checks.txt")))
+        {
+            if (File.Exists(Path.Combine(directory, "index-checks.txt")))
+            {
+                var indexChecks = IndexChecks.Run(controller, directory, log);
+                try { while (indexChecks.MoveNext()) yield return indexChecks.Current; }
+                finally { (indexChecks as IDisposable).Dispose(); }
+            }
+            var checks = AmmoModChecks.Run(spawner, controller, directory, log);
+            try { while (checks.MoveNext()) yield return checks.Current; }
+            finally { (checks as IDisposable).Dispose(); }
+            yield break;
+        }
         if (File.Exists(Path.Combine(directory, "index-checks.txt")))
         {
             var checks = IndexChecks.Run(controller, directory, log);

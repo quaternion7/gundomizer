@@ -60,11 +60,20 @@ namespace Gundomizer
                 foreach (var pair in classes)
                 {
                     var data = pair.Value;
-                    if (data == null || data.ObjectID == null || string.IsNullOrEmpty(data.ObjectID.SpawnedFromId)
-                        || !IM.HasSpawnedID(data.ObjectID.SpawnedFromId)) continue;
-                    var entry = IM.GetSpawnerID(data.ObjectID.SpawnedFromId);
-                    // Selection must identify this exact variant, not a different default cartridge.
-                    if (!SpawnerBridge.IsAvailable(entry) || entry.MainObject != data.ObjectID) continue;
+                    if (data == null || data.ObjectID == null) continue;
+                    var source = data.ObjectID;
+                    // OtherLoader's modern entries use object IDs rather than legacy IM IDs.
+                    // Its registered wrapper may also be an alias with the same exact ItemID.
+                    var entry = OtherLoaderBridge.Active ? OtherLoaderBridge.Resolve(source.ItemID) : null;
+                    if (entry == null && !string.IsNullOrEmpty(source.SpawnedFromId) && IM.HasSpawnedID(source.SpawnedFromId))
+                        entry = IM.GetSpawnerID(source.SpawnedFromId);
+                    if (entry == null)
+                        entry = AmmoSpawnerEntries.Get(source, caliber, string.IsNullOrEmpty(data.Name) ? pair.Key.ToString() : data.Name);
+                    // Never silently select a different default cartridge. The loaded prefab's
+                    // actual caliber AND class are still checked by Matches before committing.
+                    if (!SpawnerBridge.IsAvailable(entry) || (entry.MainObject != source
+                        && (!OtherLoaderBridge.Active || string.IsNullOrEmpty(source.ItemID)
+                            || !string.Equals(entry.MainObject.ItemID, source.ItemID, StringComparison.Ordinal)))) continue;
                     var properties = new List<string>();
                     foreach (var tag in AM.TagDic)
                     {

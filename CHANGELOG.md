@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.12 — metadata reset and modded ammo IDs
+
+- Add **Performance > Reset Metadata Indexing** (default off). Clear saved facts and rebuild in the background; automatically save the setting back to off. Discard results from an in-flight pre-reset helper safely.
+- Resolve ammo variants through OtherLoader's object IDs and wrapper aliases. Provide session-only native details entries for registered ammo without standalone spawner entries, retaining exact item identity and loaded caliber/class validation. Existing authored entries retain their unlock checks.
+- Add runtime coverage for A3A Exotic 12 Gauge and Bubba's Pissin Hot Reloads, plus reset/rebuild checks. Keep the optional local repair for Bubba 1.2.5's incorrect loader separate from the Gundomizer package.
+
 ## 0.1.11 — persistent background connector indexing
 
 - Start a paced metadata reader with the game. Resolve actual prefab roots without loading Unity assets, and publish supported attachment/magazine/clip connectors as bundles finish.

@@ -26,9 +26,9 @@ namespace Gundomizer
         internal static string Status => worker == null ? "not started" : worker.Status;
         internal static bool Idle => worker != null && worker.Idle && Sweeps > 0;
 
-        internal static void Start(MonoBehaviour host)
+        internal static void Start(MonoBehaviour host, bool forReset = false)
         {
-            if (worker != null || Prefab == null || !Plugin.PersistentIndex.Value) return;
+            if (worker != null || Prefab == null || (!Plugin.PersistentIndex.Value && !forReset)) return;
             streaming = Application.streamingAssetsPath;
             var types = new Dictionary<string, ConnectorKind>();
             // Reflection on type definitions only; no prefab construction or asset lookup.
@@ -40,8 +40,17 @@ namespace Gundomizer
             }
             worker = new IndexWorker(Path.Combine(Paths.CachePath, "Gundomizer"), typeof(FVRPhysicalObject).Module.ModuleVersionId.ToString(),
                 Paths.PluginPath, types, message => Plugin.Log.LogInfo(message));
-            host.StartCoroutine(Catalog());
-            Plugin.Log.LogInfo("Persistent connector index started: background metadata reads, 8 MiB/s maximum I/O; unresolved items keep live checks.");
+            if (Plugin.PersistentIndex.Value) host.StartCoroutine(Catalog());
+            if (Plugin.PersistentIndex.Value)
+                Plugin.Log.LogInfo("Persistent connector index started: background metadata reads, 8 MiB/s maximum I/O; unresolved items keep live checks.");
+        }
+
+        internal static void Reset(MonoBehaviour host)
+        {
+            Start(host, true);
+            if (worker == null) throw new InvalidOperationException("Metadata worker unavailable.");
+            worker.Reset();
+            mismatches.Clear();
         }
 
         private static AssetID Address(FVRObject source)

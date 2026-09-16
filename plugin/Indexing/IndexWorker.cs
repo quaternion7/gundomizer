@@ -14,6 +14,7 @@ namespace Gundomizer.Indexing
         private readonly Queue<string> pending = new Queue<string>();
         private readonly HashSet<string> queued = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, Job> latest = new Dictionary<string, Job>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, Job> catalog = new Dictionary<string, Job>(StringComparer.OrdinalIgnoreCase);
         private readonly ManualResetEvent stop = new ManualResetEvent(false);
         private readonly AutoResetEvent wake = new AutoResetEvent(false);
         private readonly Thread thread;
@@ -23,6 +24,8 @@ namespace Gundomizer.Indexing
         private int cacheHits, rebuilt, failed, factsCount;
         private long bytesRead;
         private bool finished;
+        private int generation;
+        private bool resetPending, resetting;
         internal IndexWorker(string directory, string game, string plugins, Dictionary<string, ConnectorKind> types, Action<string> log, string readerExecutable = null)
         {
             this.directory = directory; this.game = game; this.plugins = plugins; this.types = types; this.log = log;
@@ -37,8 +40,26 @@ namespace Gundomizer.Indexing
             lock (gate)
             {
                 if (finished) return;
+                catalog[path] = job;
                 latest[path] = job;
                 if (queued.Add(path)) pending.Enqueue(path);
+                wake.Set();
+            }
+        }
+
+        internal void Reset()
+        {
+            lock (gate)
+            {
+                if (finished) throw new InvalidOperationException("Metadata worker has stopped; restart the game to reset its cache.");
+                ++generation;
+                resetPending = true;
+                ready.Clear(); pending.Clear(); queued.Clear(); latest.Clear();
+                cacheHits = rebuilt = failed = factsCount = 0; bytesRead = 0;
+                foreach (var pair in catalog)
+                {
+                    latest.Add(pair.Key, pair.Value); queued.Add(pair.Key); pending.Enqueue(pair.Key);
+                }
                 wake.Set();
             }
         }
@@ -51,9 +72,10 @@ namespace Gundomizer.Indexing
         internal string Status
         {
             get { lock (gate) return "bundles=" + ready.Count + " pending=" + queued.Count + " cacheHits=" + cacheHits
-                + " rebuilt=" + rebuilt + " skipped=" + failed + " roots=" + factsCount + " metadataBytes=" + bytesRead; }
+                + " rebuilt=" + rebuilt + " skipped=" + failed + " roots=" + factsCount + " metadataBytes=" + bytesRead
+                + (resetPending || resetting ? " resetting" : ""); }
         }
-        internal bool Idle { get { lock (gate) return queued.Count == 0; } }
+        internal bool Idle { get { lock (gate) return !resetPending && !resetting && queued.Count == 0; } }
 
         private void Run()
         {
@@ -73,13 +95,29 @@ namespace Gundomizer.Indexing
             {
                 string path = null;
                 Job job = null;
-                lock (gate) if (pending.Count > 0) { path = pending.Dequeue(); job = latest[path]; }
+                int jobGeneration;
+                bool reset;
+                lock (gate)
+                {
+                    jobGeneration = generation;
+                    reset = resetPending; resetPending = false; resetting = reset;
+                    if (!reset && pending.Count > 0) { path = pending.Dequeue(); job = latest[path]; }
+                }
+                if (reset)
+                {
+                    // The previous helper has exited before this point, so it cannot recreate
+                    // an old cache after deletion. All filesystem work stays off Unity's thread.
+                    try { log("Metadata index reset: removed " + IndexCache.Clear(directory) + " saved bundle entries; rebuilding in the background."); }
+                    finally { lock (gate) resetting = false; }
+                    continue;
+                }
                 if (path == null) { wake.WaitOne(1000, false); continue; }
                 try
                 {
                     var facts = reader.Read(path, job.Targets);
                     lock (gate)
                     {
+                        if (jobGeneration != generation) continue;
                         if (ready.TryGetValue(path, out var previous)) factsCount -= Count(previous.Facts);
                         ready[path] = new IndexedBundle { Facts = facts };
                         if (facts.CacheHit) ++cacheHits; else ++rebuilt;
@@ -92,7 +130,8 @@ namespace Gundomizer.Indexing
                 catch (OperationCanceledException) { break; }
                 catch (Exception ex)
                 {
-                    lock (gate) { if (ready.TryGetValue(path, out var previous)) factsCount -= Count(previous.Facts); ready.Remove(path); ++failed; }
+                    lock (gate) if (jobGeneration == generation)
+                    { if (ready.TryGetValue(path, out var previous)) factsCount -= Count(previous.Facts); ready.Remove(path); ++failed; }
                     log("Index fallback for " + Path.GetFileName(path) + ": " + ex.GetType().Name + ": " + ex.Message);
                 }
                 finally
@@ -101,8 +140,11 @@ namespace Gundomizer.Indexing
                     {
                         // A late catalog registration can change this bundle's target set while
                         // it is being read. Process that snapshot next instead of losing it.
-                        if (latest[path] != job) pending.Enqueue(path);
-                        else { queued.Remove(path); latest.Remove(path); }
+                        if (jobGeneration == generation)
+                        {
+                            if (latest[path] != job) pending.Enqueue(path);
+                            else { queued.Remove(path); latest.Remove(path); }
+                        }
                     }
                 }
             }

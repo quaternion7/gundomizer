@@ -69,6 +69,28 @@ static class Program
         Check(first.Contains("rebuilt=2") && first.Contains("cacheHits=0") && first.Contains("skipped=0"), "cold worker builds both package entries: " + first);
         string warm = run();
         Check(warm.Contains("cacheHits=2") && warm.Contains("rebuilt=0") && warm.Contains("metadataBytes=0"), "warm worker uses both caches without deserializing bundle metadata: " + warm);
+        using (var worker = new IndexWorker(cache, "game", plugins, new Dictionary<string, ConnectorKind>(), Console.WriteLine,
+            Path.GetFullPath("reader/bin/Release/net40/Gundomizer.Reader.exe")))
+        {
+            worker.Queue(sourceA); worker.Queue(sourceB);
+            // Reset while work may be in flight; pre-reset results must not reappear.
+            Thread.Sleep(30); worker.Reset();
+            var watch = Stopwatch.StartNew();
+            while (!worker.Idle && watch.ElapsedMilliseconds < 20000) Thread.Sleep(10);
+            Check(worker.Idle && worker.Status.Contains("rebuilt=2") && worker.Status.Contains("cacheHits=0"),
+                "reset serializes behind the active helper and rebuilds all known bundles: " + worker.Status);
+        }
+        Check(run().Contains("cacheHits=2"), "reset rebuild is reused on the next launch");
+        using (var worker = new IndexWorker(cache, "game", plugins, new Dictionary<string, ConnectorKind>(), Console.WriteLine,
+            Path.GetFullPath("reader/bin/Release/net40/Gundomizer.Reader.exe")))
+        {
+            worker.Reset();
+            var watch = Stopwatch.StartNew();
+            while (!worker.Idle && watch.ElapsedMilliseconds < 5000) Thread.Sleep(10);
+            Check(worker.Idle && Directory.GetFiles(cache, "*.gidx").Length == 0 && worker.Status.Contains("rebuilt=0"),
+                "reset with indexing disabled clears disk entries without scheduling any source reads");
+        }
+        run(); // Restore both caches before exercising selective invalidation.
         File.WriteAllText(Path.Combine(a, "manifest.json"), "version=2");
         string updated = run();
         Check(updated.Contains("cacheHits=1") && updated.Contains("rebuilt=1"), "one package version rebuilds one entry: " + updated);
@@ -174,6 +196,15 @@ static class Program
         bool cancelled = false;
         try { budget.Check(); } catch (OperationCanceledException) { cancelled = true; }
         Check(cancelled, "cancellation interrupts worker cooperatively");
+        string resetDirectory = Path.Combine(root, "reset"); Directory.CreateDirectory(resetDirectory);
+        string owned = Path.Combine(resetDirectory, IndexCache.Key(sourceA) + ".gidx");
+        File.WriteAllText(owned, "cached");
+        string unrelated = Path.Combine(resetDirectory, "notes.gidx"); File.WriteAllText(unrelated, "keep");
+        string nested = Path.Combine(resetDirectory, "reader-job"); Directory.CreateDirectory(nested);
+        string nestedFile = Path.Combine(nested, Path.GetFileName(owned)); File.WriteAllText(nestedFile, "keep");
+        Check(IndexCache.Clear(resetDirectory) == 1 && !File.Exists(owned) && File.Exists(unrelated) && File.Exists(nestedFile),
+            "reset deletes only owned top-level cache entries, preserving other files and directories");
+        Check(IndexCache.Clear(resetDirectory) == 0, "reset is safe to repeat with an empty cache");
         // Temp directory intentionally retained as inspectable evidence; no recursive deletion.
         Console.WriteLine("Cache test artifacts: " + root);
     }

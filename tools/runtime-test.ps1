@@ -7,7 +7,8 @@ param(
     [switch]$MeasureMods,
     [switch]$IntegrationOnly,
     [switch]$IndexChecks,
-    [switch]$ColdIndexChecks
+    [switch]$ColdIndexChecks,
+    [switch]$AmmoModChecks
 )
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
@@ -41,6 +42,7 @@ if ($Action -eq 'Start') {
     @{ Profile = $profile; ProbeConfigExisted = (Test-Path -LiteralPath $probeConfig) } |
         ConvertTo-Json | Set-Content -LiteralPath (Join-Path $RunDirectory 'session.json')
     Build-Suite $RunDirectory
+    if ($AmmoModChecks) { [IO.File]::WriteAllText((Join-Path $RunDirectory 'ammo-mod-checks.txt'), 'enabled') }
     if ($MeasureMods -or $IntegrationOnly) { [IO.File]::WriteAllText((Join-Path $RunDirectory 'measure-mods.txt'), 'enabled') }
     if ($IntegrationOnly) { [IO.File]::WriteAllText((Join-Path $RunDirectory 'integration-only.txt'), 'enabled') }
     if ($IndexChecks -or $ColdIndexChecks) { [IO.File]::WriteAllText((Join-Path $RunDirectory 'index-checks.txt'), 'enabled') }
@@ -66,6 +68,9 @@ $game = @(Get-CimInstance Win32_Process -Filter "name = 'h3vr.exe'" | Where-Obje
 if ($Action -eq 'Run') {
     if ($game.Count -ne 1) { throw 'The matching test session is not running.' }
     Build-Suite $RunDirectory
+    $ammoMarker = Join-Path $RunDirectory 'ammo-mod-checks.txt'
+    if ($AmmoModChecks) { [IO.File]::WriteAllText($ammoMarker, 'enabled') }
+    elseif (Test-Path -LiteralPath $ammoMarker) { Remove-Item -LiteralPath $ammoMarker }
     $marker = Join-Path $RunDirectory 'measure-mods.txt'
     if ($MeasureMods -or $IntegrationOnly) { [IO.File]::WriteAllText($marker, 'enabled') }
     elseif (Test-Path -LiteralPath $marker) { Remove-Item -LiteralPath $marker }

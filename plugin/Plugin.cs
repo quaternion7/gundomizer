@@ -7,7 +7,7 @@ using HarmonyLib;
 
 namespace Gundomizer
 {
-    [BepInPlugin("quaternion.gundomizer", "Gundomizer", "0.1.11")]
+    [BepInPlugin("quaternion.gundomizer", "Gundomizer", "0.1.12")]
     [BepInProcess("h3vr.exe")]
     [BepInDependency("h3vr.otherloader", BepInDependency.DependencyFlags.SoftDependency)]
     public sealed class Plugin : BaseUnityPlugin
@@ -17,6 +17,7 @@ namespace Gundomizer
         internal static ConfigEntry<int> MaxNewLoads;
         internal static ConfigEntry<float> SearchSeconds;
         internal static ConfigEntry<bool> PersistentIndex;
+        internal static ConfigEntry<bool> ResetMetadataIndexing;
         private Harmony harmony;
 
         private void Awake()
@@ -36,6 +37,10 @@ namespace Gundomizer
                 PersistentIndex = Config.Bind("Performance", "Persistent Connector Index", true,
                     "Read and cache prefab connector metadata slowly in the background, without loading Unity assets. " +
                     "Only changed packages/bundles are rebuilt. Unindexed items keep the normal live checks. Restart the game after changing this setting.");
+                ResetMetadataIndexing = Config.Bind("Performance", "Reset Metadata Indexing", false,
+                    "Set true to discard Gundomizer's saved connector metadata and rebuild it in the background. " +
+                    "Runs once and switches itself back to false. Applies during play when changed through a config manager, " +
+                    "or on the next launch when edited with the game closed. Live compatibility checks remain available while rebuilding.");
                 SpawnerBridge.Validate();
                 OtherLoaderBridge.Initialize();
                 harmony = new Harmony("quaternion.gundomizer");
@@ -48,7 +53,7 @@ namespace Gundomizer
                         prefix: new HarmonyMethod(typeof(Plugin), nameof(BeforeOtherLoaderSpawn)));
                 else harmony.Patch(AccessTools.Method(typeof(ItemSpawnerV2), "BTN_Details_Spawn"),
                     prefix: new HarmonyMethod(typeof(Plugin), nameof(BeforeSelectedSpawn)));
-                Logger.LogInfo("Gundomizer 0.1.11 loaded. Classic and tag viewer randomizer enabled.");
+                Logger.LogInfo("Gundomizer 0.1.12 loaded. Classic and tag viewer randomizer enabled.");
                 ConnectorIndex.Start(this);
                 try { PersistentConnectorIndex.Start(this); }
                 catch (Exception ex) { Logger.LogWarning("Persistent indexing unavailable; live search remains enabled: " + ex); }
@@ -56,6 +61,20 @@ namespace Gundomizer
             catch (Exception ex)
             {
                 Logger.LogError("Gundomizer could not bind this game version: " + ex);
+            }
+        }
+
+        private void Update()
+        {
+            // Config managers may raise change events off-thread. Consume requests here so
+            // catalog startup and Unity state always stay on the game's main thread.
+            if (ResetMetadataIndexing == null || !ResetMetadataIndexing.Value) return;
+            try { PersistentConnectorIndex.Reset(this); }
+            catch (Exception ex) { Logger.LogWarning("Metadata reset unavailable: " + ex.Message); }
+            finally
+            {
+                try { ResetMetadataIndexing.Value = false; Config.Save(); }
+                catch (Exception ex) { Logger.LogWarning("Could not save the one-shot reset setting: " + ex.Message); }
             }
         }
 
@@ -76,6 +95,10 @@ namespace Gundomizer
             {
                 var controller = __instance.GetComponent<RandomizerController>();
                 if (controller != null && controller.enabled) controller.RefreshPreview(___m_selectedID);
+                // These entries support the native preview, history and Spawn button. They
+                // aren't browser categories and shouldn't write synthetic IDs to favorites.
+                if (AmmoSpawnerEntries.Owns(OtherLoaderBridge.Resolve(___m_selectedID)))
+                    foreach (var button in __instance.IM_FavButtons) button.gameObject.SetActive(false);
             }
             catch (Exception ex) { Log.LogWarning("Could not refresh missing preview: " + ex.Message); }
         }
@@ -99,6 +122,7 @@ namespace Gundomizer
         private void OnDestroy()
         {
             PersistentConnectorIndex.Stop();
+            AmmoSpawnerEntries.Clear();
             if (harmony != null) harmony.UnpatchSelf();
         }
     }

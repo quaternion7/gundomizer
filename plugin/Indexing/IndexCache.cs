@@ -17,6 +17,24 @@ namespace Gundomizer.Indexing
         }
         internal static string Key(string path) => Hash(Encoding.UTF8.GetBytes(Path.GetFullPath(path).ToLowerInvariant()));
 
+        internal static int Clear(string directory)
+        {
+            if (!Directory.Exists(directory)) return 0;
+            int removed = 0;
+            // Only our top-level, SHA-256-named cache entries. Never traverse or remove
+            // directories, helper jobs, user files, or another mod's cache.
+            foreach (string path in Directory.GetFiles(directory, "*.gidx", SearchOption.TopDirectoryOnly))
+            {
+                string name = Path.GetFileNameWithoutExtension(path);
+                if (name.Length != 64) continue;
+                bool hex = true;
+                foreach (char c in name) if (!Uri.IsHexDigit(c)) { hex = false; break; }
+                if (!hex) continue;
+                File.Delete(path); ++removed;
+            }
+            return removed;
+        }
+
         internal static string Fingerprint(string path, string gameIdentity, string pluginsPath, ReadBudget budget)
         {
             var file = new FileInfo(path);

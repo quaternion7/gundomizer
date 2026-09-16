@@ -44,7 +44,7 @@ dotnet run --project .\tests\Gundomizer.Tests.csproj -c Release
 The default deployment profile is **Development**. The deployment script creates the local ZIP, backs up this mod's prior files and the profile registry, installs only Gundomizer, and verifies the installed DLL hash. If r2modman was already displaying the profile, reselect it to refresh the mod list.
 
 Build output: `plugin/bin/Release/net35/quaternion.gundomizer.dll`.
-Local package: `artifacts/quaternion-Gundomizer-0.1.11.zip`.
+Local package: `artifacts/quaternion-Gundomizer-0.1.12.zip`.
 
 Please test category overview versus subcategory rolls, empty hands, magazine fit, an installed Picatinny adapter, occupied attachment mounts, hover tooltips, rapid clicks, and changing hands while an asset loads. See [the prototype plan](docs/extension-plan.md) for the full acceptance checklist.
 
@@ -60,6 +60,8 @@ In r2modman's Config Editor, open `BepInEx/config/quaternion.gundomizer.cfg`. Th
 
 **Performance > Persistent Connector Index** defaults to **true**. The low-priority reader starts with the game and limits its reads to approximately 8 MiB/s. A bundled Windows .NET 4 helper keeps parsing and fingerprint hashing outside Unity's garbage collector. Package/version and bundle fingerprints keep unchanged caches reusable. Cached data lives in `BepInEx/cache/Gundomizer`; it can be removed while the game is closed to rebuild it. Unsupported serialization or custom root scripts keep the normal live checks. Logs show indexing progress. Restart after changing this setting; see [index behavior and limits](docs/persistent-index.md).
 
+**Performance > Reset Metadata Indexing** defaults to **false**. Set true to clear Gundomizer's saved connector facts and rebuild them in the background. It runs once and saves itself back to false. Use an in-game config manager, or edit the file while the game is closed and launch. Live compatibility checks remain available while rebuilding. With persistent indexing disabled, it only clears the cache.
+
 **General > Spawn Item Instantly** defaults to **true** and applies to all three roll buttons:
 
 - **true:** immediately spawn one main item and select its entry, as before.
@@ -72,6 +74,8 @@ Both modes keep the same section scope and compatibility checks. Each roll uses 
 Hold a firearm, magazine, clip, speedloader, or cartridge, then open the arrow beside the cartridge button. Toggle individual named variants, or use **All**, **None**, and the page arrows. All variants start enabled; choices are remembered per caliber across panels for the current game session. Restarting resets them. Disabling every variant disables the ammo roll while leaving its choices accessible.
 
 The popup uses native ammo names and shows native property tags such as incendiary, tracer, and armor penetrating when hovering a row. It reads metadata without loading the cartridge prefabs. Multi-caliber firearms and installed/integrated attachable firearms contribute their supported calibers. Changing held objects closes the popup; changing choices cancels a pending ammo roll. The loaded cartridge's actual caliber and class are checked again before selection/spawning.
+
+Mods can register ammo for the ammo station/T&H without supplying standalone spawner entries. Gundomizer gives those registered rounds temporary native details entries, using a generic preview where needed, so both instant spawning and selection followed by native Spawn work. These entries do not add browser categories or saved favorites. See [tested ammo packs and the local Bubba loader repair](docs/ammo-mod-compatibility.md).
 
 Only unlocked variants with an exact native item-spawner entry are listed, so selection mode never silently substitutes another round. Custom ammo missing that registration is currently omitted. The native tag pager is shifted slightly right to leave room for the ammo group without reducing its text or hit targets.
 
