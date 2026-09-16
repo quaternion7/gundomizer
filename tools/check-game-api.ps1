@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
-    [string]$GameManagedPath = '<H3VR>\h3vr_Data\Managed',
-    [string]$BepInExCorePath = "$env:APPDATA\r2modmanPlus-local\H3VR\profiles\Development\BepInEx\core"
+    [Parameter(Mandatory = $true)][string]$GameManagedPath,
+    [Parameter(Mandatory = $true)][string]$BepInExCorePath
 )
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot

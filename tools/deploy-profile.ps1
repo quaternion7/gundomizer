@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$ProfilePath = "$env:APPDATA\r2modmanPlus-local\H3VR\profiles\Development",
+    [Parameter(Mandatory = $true)][string]$ProfilePath,
     [switch]$SkipBuild
 )
 $ErrorActionPreference = 'Stop'

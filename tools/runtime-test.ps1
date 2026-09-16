@@ -1,8 +1,8 @@
 [CmdletBinding()]
 param(
     [ValidateSet('Start', 'Run', 'Stop')][string]$Action = 'Start',
-    [string]$ProfilePath = "$env:APPDATA\r2modmanPlus-local\H3VR\profiles\Development",
-    [string]$SteamPath = 'C:\Program Files (x86)\Steam\steam.exe',
+    [string]$ProfilePath,
+    [string]$SteamPath,
     [string]$RunDirectory,
     [switch]$MeasureMods,
     [switch]$IntegrationOnly,
@@ -26,6 +26,8 @@ function Build-Suite([string]$Destination) {
 }
 
 if ($Action -eq 'Start') {
+    if (-not $ProfilePath -or -not $SteamPath) { throw 'Start requires -ProfilePath and -SteamPath for your local installation.' }
+    if (-not (Test-Path -LiteralPath $SteamPath -PathType Leaf)) { throw 'SteamPath must identify steam.exe.' }
     if (Get-Process h3vr -ErrorAction SilentlyContinue) { throw 'H3VR is already running.' }
     $profile = (Resolve-Path -LiteralPath $ProfilePath).Path
     $probe = Join-Path $profile 'BepInEx\plugins\Gundomizer.RuntimeProbe.dll'

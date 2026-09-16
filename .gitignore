@@ -13,3 +13,10 @@ reference/
 temp/
 *.local.json
 artifacts/
+
+# Private planning, machine settings, and repository backups
+/.local/
+*.log
+.env
+.env.*
+!.env.example
