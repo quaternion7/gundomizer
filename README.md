@@ -1,6 +1,6 @@
 # Gundomizer
 
-![Gundomizer buttons in Item Spawner V2](docs/images/item-spawner.png)
+[![Complete Item Spawner V2 with Gundomizer's rainbow buttons](docs/images/item-spawner.png)](docs/images/item-spawner-original.png)
 
 Randomize items directly in **Item Spawner V2**, including the **toolbox tablet**, in classic and tag-search modes.
 

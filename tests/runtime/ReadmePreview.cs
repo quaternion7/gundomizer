@@ -62,18 +62,20 @@ public static class ReadmePreview
         Canvas.ForceUpdateCanvases();
         var cameraObject = new GameObject("Gundomizer README camera");
         var camera = cameraObject.AddComponent<Camera>();
-        const int width = 1800, height = 720;
+        const int width = 1920, height = 1080;
         var target = new RenderTexture(width, height, 24);
         var pixels = new Texture2D(width, height, TextureFormat.RGB24, false);
         var previous = RenderTexture.active;
         try
         {
-            // Frame the lower panel, keeping the controls prominent in a wide capture.
-            var center = canvas.TransformPoint(canvas.rect.center - new Vector2(0, canvas.rect.height * .1f));
+            // Capture the complete panel, including its top tabs and border. Cover callouts
+            // are presentation edits; keep an untouched game capture as their source.
+            var center = canvas.TransformPoint(canvas.rect.center);
             camera.transform.position = center - canvas.forward * 2;
             camera.transform.rotation = canvas.rotation;
             camera.orthographic = true;
-            camera.orthographicSize = canvas.rect.width * canvas.lossyScale.x * height / width * .515f;
+            camera.orthographicSize = Mathf.Max(canvas.rect.height * canvas.lossyScale.y,
+                canvas.rect.width * canvas.lossyScale.x * height / width) * .525f;
             camera.nearClipPlane = .01f; camera.farClipPlane = 4;
             camera.clearFlags = CameraClearFlags.SolidColor;
             camera.backgroundColor = new Color(.04f, .04f, .04f);
