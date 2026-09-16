@@ -15,7 +15,7 @@ Randomize items directly in **Item Spawner V2**, including the **toolbox tablet*
 
 ## Mod compatibility
 
-Supports **Modul / Modular Workshop** content, **OtherLoader**, and **OtherLoaderPatched**. These mods are optional.
+Tested with **Modul / Modular Workshop** content, **OtherLoader**, and **OtherLoaderPatched**. These mods are optional.
 
 ## Optimization
 
