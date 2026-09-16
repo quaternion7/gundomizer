@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net40</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>Gundomizer.Reader</AssemblyName>
+    <LangVersion>latest</LangVersion>
+    <PlatformTarget>x64</PlatformTarget>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net40" Version="1.0.3" PrivateAssets="all" />
+    <PackageReference Include="AssetsTools.NET" Version="3.0.5" />
+    <Compile Include="../plugin/Indexing/ConnectorFacts.cs" Link="ConnectorFacts.cs" />
+    <Compile Include="../plugin/Indexing/ReadBudget.cs" Link="ReadBudget.cs" />
+    <Compile Include="../plugin/Indexing/IndexCache.cs" Link="IndexCache.cs" />
+    <Compile Include="../plugin/Indexing/ReaderProtocol.cs" Link="ReaderProtocol.cs" />
+    <Compile Include="../plugin/Indexing/BundleMetadataReader.cs" Link="BundleMetadataReader.cs" />
+  </ItemGroup>
+  <Target Name="UseUnityCompatibleReaderLibrary" AfterTargets="Build">
+    <!-- The helper runs on CLR 4, which can consume the net35 library. Keep the copy
+         in the plugin folder compatible with Unity's CLR if another mod resolves it. -->
+    <Copy SourceFiles="$(NuGetPackageRoot)assetstools.net/3.0.5/lib/net35/AssetsTools.NET.dll" DestinationFolder="$(TargetDir)" />
+  </Target>
+</Project>

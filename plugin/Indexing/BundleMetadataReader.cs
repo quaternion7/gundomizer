@@ -13,7 +13,7 @@ namespace Gundomizer.Indexing
         internal BundleMetadataReader(Dictionary<string, ConnectorKind> knownTypes, ReadBudget budget)
         { this.knownTypes = knownTypes; this.budget = budget; }
 
-        internal BundleFacts Read(string path)
+        internal BundleFacts Read(string path, HashSet<string> requested = null)
         {
             var result = new BundleFacts();
             var manager = new AssetsManager();
@@ -61,8 +61,12 @@ namespace Gundomizer.Indexing
                                 var pointer = pair["second"]["asset"];
                                 string assetPath = pair["first"].AsString;
                                 if (assetPath.Length > 2048) continue;
+                                if (result.Assets.Count >= 32768) throw new NotSupportedException("Oversized combined prefab catalog");
                                 ConnectorFacts facts = null;
-                                if (Local(pointer)) facts = RootFacts(manager, file, pointer["m_PathID"].AsLong);
+                                string normalized = BundleFacts.Normalize(assetPath);
+                                bool needed = requested == null || requested.Contains(normalized)
+                                    || requested.Contains(Path.GetFileName(normalized)) || requested.Contains(Path.GetFileNameWithoutExtension(normalized));
+                                if (needed && Local(pointer)) facts = RootFacts(manager, file, pointer["m_PathID"].AsLong);
                                 result.Add(assetPath, facts);
                             }
                         }

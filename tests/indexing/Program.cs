@@ -12,6 +12,7 @@ static class Program
     {
         Policies();
         if (args.Length == 2 && args[0] == "--worker") { WorkerChecks(args[1]); return; }
+        if (args.Length == 2 && args[0] == "--cancel") { CancelHelper(args[1]); return; }
         var types = new Dictionary<string, ConnectorKind> {
             { "FistVR.FVRFireArmAttachment", ConnectorKind.Attachment },
             { "FistVR.Suppressor", ConnectorKind.Attachment },
@@ -29,6 +30,15 @@ static class Program
                 + " mapped connector roots; " + result.BytesRead + " bytes; elapsed=" + watch.ElapsedMilliseconds + "ms");
             foreach (var pair in result.Assets.Where(p => p.Value != null).Take(8))
                 Console.WriteLine(pair.Key + " => " + pair.Value.Kind + ":" + pair.Value.Connector);
+            if (result.Assets.Values.Any(v => v != null))
+            {
+                var selected = new HashSet<string>(result.Assets.Where(p => p.Value != null).Take(3).Select(p => p.Key));
+                var targeted = reader.Read(path, selected);
+                Check(targeted.Assets.Count == result.Assets.Count && selected.All(k => targeted.Find(k) != null
+                    && targeted.Find(k).Connector == result.Find(k).Connector), "targeted reading retains complete container ambiguity checks and the requested connector facts");
+                Check(targeted.Assets.All(p => selected.Contains(p.Key) || p.Value == null), "unrequested prefab components are not deserialized");
+                Console.WriteLine("Targeted bytes=" + targeted.BytesRead + " vs full=" + result.BytesRead);
+            }
         }
     }
 
@@ -45,7 +55,8 @@ static class Program
         File.WriteAllText(Path.Combine(b, "manifest.json"), "version=1");
         Func<string> run = () =>
         {
-            using (var worker = new IndexWorker(cache, "game", plugins, new Dictionary<string, ConnectorKind>(), Console.WriteLine))
+            using (var worker = new IndexWorker(cache, "game", plugins, new Dictionary<string, ConnectorKind>(), Console.WriteLine,
+                Path.GetFullPath("reader/bin/Release/net40/Gundomizer.Reader.exe")))
             {
                 worker.Queue(sourceA); worker.Queue(sourceB);
                 var watch = Stopwatch.StartNew();
@@ -65,10 +76,51 @@ static class Program
         File.WriteAllText(cacheA, "corrupt");
         string corrupt = run();
         Check(corrupt.Contains("cacheHits=1") && corrupt.Contains("rebuilt=1"), "corrupt package cache rebuilds independently: " + corrupt);
+        var partial = new BundleFacts(); partial.Add("assets/known.prefab", new ConnectorFacts { Kind = ConnectorKind.Clip, Connector = 2 }); partial.Seal();
+        IndexCache.Save(cacheA, IndexCache.Fingerprint(sourceA, "game", plugins, new ReadBudget(new ManualResetEvent(false), false)) + ":all", partial);
+        using (var worker = new IndexWorker(cache, "game", plugins, new Dictionary<string, ConnectorKind>(), Console.WriteLine,
+            Path.GetFullPath("reader/bin/Release/net40/Gundomizer.Reader.exe")))
+        {
+            worker.Queue(sourceA); worker.Queue(sourceB);
+            bool partialAvailable = false;
+            var watch = Stopwatch.StartNew();
+            while (!worker.Idle && watch.ElapsedMilliseconds < 20000)
+            {
+                if (worker.Find(sourceA, "known") != null && !worker.Idle) partialAvailable = true;
+                CheckUnknown(worker.Find(sourceB, "unknown"));
+                Thread.Sleep(1);
+            }
+            Check(partialAvailable, "completed cache data is usable while another source is still pending; unresolved lookup remains unknown");
+        }
         File.Delete(sourceA);
         string removed = run();
         Check(removed.Contains("bundles=1") && removed.Contains("cacheHits=1"), "removed source cannot serve an old disk cache: " + removed);
+        using (var worker = new IndexWorker(Path.Combine(root, "missing-reader-cache"), "game", plugins,
+            new Dictionary<string, ConnectorKind>(), Console.WriteLine, Path.Combine(root, "missing-reader.exe")))
+        {
+            worker.Queue(sourceB);
+            var watch = Stopwatch.StartNew();
+            while (!worker.Idle && watch.ElapsedMilliseconds < 5000) Thread.Sleep(10);
+            Check(worker.Idle && worker.Find(sourceB, "known") == null && worker.Status.Contains("skipped=1"), "missing helper leaves unresolved items on the live fallback");
+        }
         Console.WriteLine("Worker test artifacts: " + root);
+    }
+
+    static void CheckUnknown(ConnectorFacts fact) { if (fact != null) throw new Exception("Unknown item received fabricated connector data"); }
+
+    static void CancelHelper(string bundle)
+    {
+        string root = Path.Combine(Path.GetTempPath(), "Gundomizer-cancel-tests-" + Guid.NewGuid().ToString("N"));
+        var stop = new ManualResetEvent(false);
+        Exception failure = null;
+        var reader = new ExternalMetadataReader(Path.GetFullPath("reader/bin/Release/net40/Gundomizer.Reader.exe"), root,
+            "game", root, new Dictionary<string, ConnectorKind>(), new ReadBudget(stop, true));
+        var thread = new Thread(() => { try { reader.Read(bundle, null); } catch (Exception ex) { failure = ex; } });
+        thread.Start();
+        Thread.Sleep(250);
+        stop.Set();
+        Check(thread.Join(5000) && failure is OperationCanceledException, "cancelling an active helper returns promptly without publishing partial data");
+        Check(Directory.GetDirectories(root, "reader-*").Length == 0, "cancelled helper job files are cleaned up");
     }
 
     static void Check(bool condition, string message)

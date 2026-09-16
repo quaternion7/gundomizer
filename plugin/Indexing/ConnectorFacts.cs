@@ -19,6 +19,8 @@ namespace Gundomizer.Indexing
         private Dictionary<string, ConnectorFacts> aliases;
         internal string SkipReason = "";
         internal long BytesRead;
+        internal bool CacheHit = false;
+        internal string CacheWarning = "";
 
         internal void Add(string path, ConnectorFacts facts)
         {

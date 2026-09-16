@@ -10,7 +10,7 @@ In tag-search mode, the dice and gun/hand buttons use the native results matchin
 
 Hover a button for its tooltip. Items spawn on the spawner's native pads and become the selected entry in the details panel. The buttons spawn **one main object**, without bundled secondary items or the stock random gun's attachment pile. Accepting a selection with native **Spawn** includes any bundled secondary item.
 
-**Version 0.1.11 is a local prototype.** Searches limit new prefab loads and can resume after pausing. Plain random selection uses existing artwork without loading the item. A small background index reads already-loaded components without requesting assets or retaining their prefabs. See [the completion roadmap](docs/roadmap.md).
+**Version 0.1.11 is a local prototype.** Searches limit new prefab loads and can resume after pausing. A persistent background index reads connector metadata without loading Unity assets and reuses unchanged package caches on later launches. Buttons use completed index data immediately and retain live checks for unresolved items. See [the completion roadmap](docs/roadmap.md).
 
 When OtherLoader is installed, Gundomizer uses its object IDs, classic category tree, unlock state, and bundled spawn list. This keeps native and modded items in the same browser pool. The optional integration was tested with OtherLoader 1.3.7, Modul PM, Modul XM8, G36 Extras, and FN F2000; see [the measurements and remaining loading costs](docs/modded-profile-measurements.md).
 
@@ -48,7 +48,7 @@ Local package: `artifacts/quaternion-Gundomizer-0.1.11.zip`.
 
 Please test category overview versus subcategory rolls, empty hands, magazine fit, an installed Picatinny adapter, occupied attachment mounts, hover tooltips, rapid clicks, and changing hands while an asset loads. See [the prototype plan](docs/extension-plan.md) for the full acceptance checklist.
 
-For performance testing, compare the first compatible roll with subsequent rolls in the same section. Each compatible request logs its outcome, section/filtered counts, prefab requests/checks, requests that waited, observed load-wait time, and total time. A cached asset request may complete immediately; these are observed request timings, not a measurement of disk I/O alone. This version does not preload the item catalog or create a startup compatibility matrix.
+For performance testing, compare the first compatible roll with subsequent rolls in the same section. Each compatible request logs its outcome, section/filtered counts, prefab requests/checks, requests that waited, observed load-wait time, and total time. A cached asset request may complete immediately; these are observed request timings, not a measurement of disk I/O alone. Startup indexing reads per-prefab connector facts; it does not preload the item catalog or create a pairwise compatibility matrix.
 
 An opt-in [runtime test harness](docs/runtime-testing.md) can launch the dev profile without VR, exercise the real spawner, simulate held-object state, and capture panel images and timings. Its DLL is excluded from the release package.
 
@@ -57,6 +57,8 @@ For large mod collections, **Performance > New Prefab Loads Per Click** defaults
 ## Settings
 
 In r2modman's Config Editor, open `BepInEx/config/quaternion.gundomizer.cfg`. The plugin creates this file on its first launch.
+
+**Performance > Persistent Connector Index** defaults to **true**. The low-priority reader starts with the game and limits its reads to approximately 8 MiB/s. A bundled Windows .NET 4 helper keeps parsing and fingerprint hashing outside Unity's garbage collector. Package/version and bundle fingerprints keep unchanged caches reusable. Cached data lives in `BepInEx/cache/Gundomizer`; it can be removed while the game is closed to rebuild it. Unsupported serialization or custom root scripts keep the normal live checks. Logs show indexing progress. Restart after changing this setting; see [index behavior and limits](docs/persistent-index.md).
 
 **General > Spawn Item Instantly** defaults to **true** and applies to all three roll buttons:
 
@@ -80,7 +82,8 @@ Only unlocked variants with an exact native item-spawner entry are listed, so se
 - [Original code findings and source map](docs/item-spawner-v2-analysis.md)
 - [Current prototype behavior and validation](docs/extension-plan.md)
 - [Research provenance](docs/research-baseline.md)
-- [Persistent metadata index experiment](docs/persistent-index-research.md)
+- [Persistent index, cache invalidation and limits](docs/persistent-index.md)
+- [Original metadata reader experiment](docs/persistent-index-research.md)
 
 The runtime targets .NET Framework 3.5, using the same initial dependency baseline as other H3VR mods. The independent policy tests run on .NET 5. The compile-time H3VR.GameLibs package is checked against the locally installed game through `check-game-api.ps1`.
 

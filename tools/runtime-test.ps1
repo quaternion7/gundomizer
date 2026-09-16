@@ -6,7 +6,8 @@ param(
     [string]$RunDirectory,
     [switch]$MeasureMods,
     [switch]$IntegrationOnly,
-    [switch]$IndexChecks
+    [switch]$IndexChecks,
+    [switch]$ColdIndexChecks
 )
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
@@ -42,7 +43,8 @@ if ($Action -eq 'Start') {
     Build-Suite $RunDirectory
     if ($MeasureMods -or $IntegrationOnly) { [IO.File]::WriteAllText((Join-Path $RunDirectory 'measure-mods.txt'), 'enabled') }
     if ($IntegrationOnly) { [IO.File]::WriteAllText((Join-Path $RunDirectory 'integration-only.txt'), 'enabled') }
-    if ($IndexChecks) { [IO.File]::WriteAllText((Join-Path $RunDirectory 'index-checks.txt'), 'enabled') }
+    if ($IndexChecks -or $ColdIndexChecks) { [IO.File]::WriteAllText((Join-Path $RunDirectory 'index-checks.txt'), 'enabled') }
+    if ($ColdIndexChecks) { [IO.File]::WriteAllText((Join-Path $RunDirectory 'cold-index-checks.txt'), 'enabled') }
     Copy-Item -LiteralPath (Join-Path $repo 'tests\runtime\bin\Release\net35\Gundomizer.RuntimeProbe.dll') -Destination $probe
     [IO.File]::WriteAllText($activeFile, $RunDirectory)
     [IO.File]::WriteAllText((Join-Path $RunDirectory 'command.txt'), 'run')
@@ -71,8 +73,11 @@ if ($Action -eq 'Run') {
     if ($IntegrationOnly) { [IO.File]::WriteAllText($integrationMarker, 'enabled') }
     elseif (Test-Path -LiteralPath $integrationMarker) { Remove-Item -LiteralPath $integrationMarker }
     $indexMarker = Join-Path $RunDirectory 'index-checks.txt'
-    if ($IndexChecks) { [IO.File]::WriteAllText($indexMarker, 'enabled') }
+    if ($IndexChecks -or $ColdIndexChecks) { [IO.File]::WriteAllText($indexMarker, 'enabled') }
     elseif (Test-Path -LiteralPath $indexMarker) { Remove-Item -LiteralPath $indexMarker }
+    $coldMarker = Join-Path $RunDirectory 'cold-index-checks.txt'
+    if ($ColdIndexChecks) { [IO.File]::WriteAllText($coldMarker, 'enabled') }
+    elseif (Test-Path -LiteralPath $coldMarker) { Remove-Item -LiteralPath $coldMarker }
     [IO.File]::WriteAllText((Join-Path $RunDirectory 'command.txt'), 'run')
     Write-Output "Queued updated suite. Results: $RunDirectory"
     return

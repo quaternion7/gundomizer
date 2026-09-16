@@ -66,6 +66,12 @@ public static class RuntimeSuite
             var measurements = ModdedMeasurements.Run(spawner, controller, directory, log);
             try { while (measurements.MoveNext()) yield return measurements.Current; }
             finally { (measurements as IDisposable).Dispose(); }
+            if (File.Exists(Path.Combine(directory, "index-checks.txt")))
+            {
+                var checks = IndexChecks.Run(controller, directory, log);
+                try { while (checks.MoveNext()) yield return checks.Current; }
+                finally { (checks as IDisposable).Dispose(); }
+            }
             yield break;
         }
         var bridge = Get<object>(controller, "bridge");

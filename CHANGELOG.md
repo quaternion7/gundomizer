@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.11 — persistent background connector indexing
+
+- Start a paced metadata reader with the game. Resolve actual prefab roots without loading Unity assets, and publish supported attachment/magazine/clip connectors as bundles finish.
+- Persist profile-local caches with schema/game/source/package fingerprints, checksums and atomic replacement. Rebuild changed packages independently; recover from corrupt or missing caches.
+- Keep native live checks for unindexed, ambiguous, custom-script or unsupported entries. Already-loaded components take precedence over serialized data. Preserve search budgets and resume behavior.
+- Run parsing, fingerprinting and cache work in a bundled low-priority .NET 4 helper process to avoid Unity's shared garbage-collector pauses. Include AssetsTools.NET 3.0.5 and its MIT notice.
+- Add cold/warm, package-update, corruption, removal, partial-result, missing-helper and runtime frame/memory tests.
+
 ## 0.1.10 — OtherLoader integration and modded measurements
 
 - Resolve OtherLoader's browser object IDs to native spawner entries; select using the IDs its details panel expects. Keep native and modded results together and respect OtherLoader's unlock state.

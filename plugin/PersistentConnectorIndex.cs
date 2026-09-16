@@ -18,7 +18,7 @@ namespace Gundomizer
         private static readonly FieldInfo Prefab = AccessTools.Field(typeof(AnvilAsset), "m_anvilPrefab");
         private static readonly Dictionary<string, string> paths = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         private static readonly HashSet<string> mismatches = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        private static readonly HashSet<string> submitted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private static readonly Dictionary<string, HashSet<string>> submitted = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
         private static IndexWorker worker;
         private static string streaming;
         internal static int Sweeps;
@@ -91,6 +91,8 @@ namespace Gundomizer
                 if (ManagerSingleton<IM>.Instance != null && IM.OD != null && IM.OD.Count > 0)
                 {
                     var en = IM.OD.Values.GetEnumerator();
+                    var targets = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+                    bool complete = true;
                     try
                     {
                         bool more = true;
@@ -100,7 +102,7 @@ namespace Gundomizer
                             int count = 0;
                             do
                             {
-                                try { more = en.MoveNext(); } catch (InvalidOperationException) { more = false; }
+                                try { more = en.MoveNext(); } catch (InvalidOperationException) { more = false; complete = false; }
                                 if (!more) break;
                                 var obj = en.Current;
                                 if (obj == null) continue;
@@ -114,7 +116,9 @@ namespace Gundomizer
                                     if (string.IsNullOrEmpty(address.Bundle) || string.IsNullOrEmpty(address.AssetName)) continue;
                                     string path = OtherLoaderBridge.BundlePath(address.Bundle) ?? Path.Combine(streaming, address.Bundle);
                                     paths[address.Bundle] = path;
-                                    if (submitted.Add(path)) worker.Queue(path);
+                                    HashSet<string> names;
+                                    if (!targets.TryGetValue(path, out names)) targets.Add(path, names = new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+                                    names.Add(Indexing.BundleFacts.Normalize(address.AssetName));
                                 }
                                 catch (Exception ex) { Plugin.Log.LogDebug("Index source unavailable: " + ex.Message); }
                             } while (++count < 32 && slice.Elapsed.TotalMilliseconds < 0.5);
@@ -123,7 +127,17 @@ namespace Gundomizer
                         }
                     }
                     finally { en.Dispose(); }
-                    ++Sweeps;
+                    if (complete)
+                    {
+                        foreach (var pair in targets)
+                        {
+                            HashSet<string> previous;
+                            if (!submitted.TryGetValue(pair.Key, out previous) || !previous.SetEquals(pair.Value))
+                            { worker.Queue(pair.Key, pair.Value); submitted[pair.Key] = pair.Value; }
+                            yield return null;
+                        }
+                        ++Sweeps;
+                    }
                 }
                 // Poll progress while the worker runs; rescan registry for late mod registration.
                 for (int i = 0; i < (Sweeps == 0 ? 1 : 15); ++i)
