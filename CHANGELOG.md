@@ -1,8 +1,10 @@
 # Changelog
 
-## Unreleased
+## 1.1.0
 
 Add compatible item choices: type and connector toggles, with current-section/tag or all-item scope. The global scope includes modular magazines stored under Firearms.
+
+Use a chain-link icon for compatible rolls, with a grouped dropdown for filter choices.
 
 Recognize byte-encoded magazine flags in bundle metadata, enabling lightweight indexing for ModulAK magazines. Existing indexes rebuild once for the corrected reader.
 
