@@ -79,7 +79,8 @@ public static class ReadmePreview
             camera.nearClipPlane = .01f; camera.farClipPlane = 4;
             camera.clearFlags = CameraClearFlags.SolidColor;
             camera.backgroundColor = new Color(.04f, .04f, .04f);
-            camera.cullingMask = 1 << canvas.gameObject.layer;
+            var renderCanvas = canvas.GetComponentInParent<Canvas>();
+            camera.cullingMask = 1 << (renderCanvas == null ? canvas.gameObject.layer : renderCanvas.gameObject.layer);
             camera.targetTexture = target; camera.Render(); RenderTexture.active = target;
             pixels.ReadPixels(new Rect(0, 0, width, height), 0, 0); pixels.Apply();
             File.WriteAllBytes(path, pixels.EncodeToPNG());

@@ -13,7 +13,8 @@ param(
     [switch]$ReadmePreview,
     [switch]$SearchChecks,
     [switch]$PatchedLoaderChecks,
-    [switch]$ModularMagazineChecks
+    [switch]$ModularMagazineChecks,
+    [switch]$CompatiblePanelChecks
 )
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
@@ -49,6 +50,7 @@ if ($Action -eq 'Start') {
     @{ Profile = $profile; ProbeConfigExisted = (Test-Path -LiteralPath $probeConfig) } |
         ConvertTo-Json | Set-Content -LiteralPath (Join-Path $RunDirectory 'session.json')
     Build-Suite $RunDirectory
+    if ($CompatiblePanelChecks) { [IO.File]::WriteAllText((Join-Path $RunDirectory 'compatible-panel-checks.txt'), 'enabled') }
     if ($ModularMagazineChecks) { [IO.File]::WriteAllText((Join-Path $RunDirectory 'modular-magazine-checks.txt'), 'enabled') }
     if ($PatchedLoaderChecks) { [IO.File]::WriteAllText((Join-Path $RunDirectory 'patched-loader-checks.txt'), 'enabled') }
     if ($AmmoModChecks) { [IO.File]::WriteAllText((Join-Path $RunDirectory 'ammo-mod-checks.txt'), 'enabled') }
@@ -80,6 +82,9 @@ $game = @(Get-CimInstance Win32_Process -Filter "name = 'h3vr.exe'" | Where-Obje
 if ($Action -eq 'Run') {
     if ($game.Count -ne 1) { throw 'The matching test session is not running.' }
     Build-Suite $RunDirectory
+    $compatibleMarker = Join-Path $RunDirectory 'compatible-panel-checks.txt'
+    if ($CompatiblePanelChecks) { [IO.File]::WriteAllText($compatibleMarker, 'enabled') }
+    elseif (Test-Path -LiteralPath $compatibleMarker) { Remove-Item -LiteralPath $compatibleMarker }
     $modularMarker = Join-Path $RunDirectory 'modular-magazine-checks.txt'
     if ($ModularMagazineChecks) { [IO.File]::WriteAllText($modularMarker, 'enabled') }
     elseif (Test-Path -LiteralPath $modularMarker) { Remove-Item -LiteralPath $modularMarker }

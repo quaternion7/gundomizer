@@ -26,7 +26,7 @@ public static class RuntimeSuite
 
     public static IEnumerator Run(string directory, Action<string> log)
     {
-        if (File.Exists(Path.Combine(directory, "modular-magazine-checks.txt")))
+        if (File.Exists(Path.Combine(directory, "modular-magazine-checks.txt")) || File.Exists(Path.Combine(directory, "compatible-panel-checks.txt")))
         {
             var setup = AmmoModChecks.Prepare(directory, log);
             try { while (setup.MoveNext()) yield return setup.Current; }
@@ -67,6 +67,13 @@ public static class RuntimeSuite
         Check(spawner != null, "live native ItemSpawnerV2 exists", log);
         var controller = spawner.GetComponents<MonoBehaviour>().FirstOrDefault(c => c.GetType().FullName == "Gundomizer.RandomizerController");
         Check(controller != null && controller.enabled, "Gundomizer attached and initialized", log);
+        if (File.Exists(Path.Combine(directory, "compatible-panel-checks.txt")))
+        {
+            var checks = CompatiblePanelChecks.Run(spawner, controller, directory, log);
+            try { while (checks.MoveNext()) yield return checks.Current; }
+            finally { (checks as IDisposable).Dispose(); }
+            yield break;
+        }
         if (File.Exists(Path.Combine(directory, "modular-magazine-checks.txt")))
         {
             var checks = ModularMagazineChecks.Run(spawner, controller, directory, log);
@@ -141,8 +148,14 @@ public static class RuntimeSuite
         Check(root.gameObject.activeInHierarchy && root.position == originalPosition, "tag controls visible at the same position", log);
         spawner.BTN_Tag_ClearSelectedTags();
         var all = (List<ItemSpawnerID>)Call(bridge, "CaptureSection");
-        Check(all.Count > 12 && all.Count == Get<List<string>>(spawner, "WorkingItemIDs").Count,
-            "tag pool contains all " + all.Count + " native results, beyond the visible grid page", log);
+        var workingIds = Get<List<string>>(spawner, "WorkingItemIDs");
+        var loaderBridge = controller.GetType().Assembly.GetType("Gundomizer.OtherLoaderBridge");
+        var resolved = workingIds.Select(id => (ItemSpawnerID)AccessTools.Method(loaderBridge, "Resolve").Invoke(null, new object[] { id })).ToList();
+        var availableIds = resolved.Where(e => (bool)AccessTools.Method(loaderBridge, "Available").Invoke(null, new object[] { e }))
+            .Select(e => e.MainObject.ItemID).ToList();
+        log("TAG POOL working=" + workingIds.Count + " captured=" + all.Count + " unavailable=" + (workingIds.Count - availableIds.Count));
+        Check(all.Count > 12 && new HashSet<string>(availableIds).SetEquals(all.Select(e => e.MainObject.ItemID)),
+            "tag pool contains all " + all.Count + " available native results, beyond the visible grid page", log);
         spawner.BTN_List_PageNext();
         var next = (List<ItemSpawnerID>)Call(bridge, "CaptureSection");
         Check(new HashSet<string>(all.Select(e => e.ItemID)).SetEquals(next.Select(e => e.ItemID)), "pagination keeps the same random pool", log);
@@ -390,6 +403,9 @@ public static class RuntimeSuite
             spawner.BTN_SetPageMode(1);
             spawner.BTN_SimpleMode_SwitchToTagSearch();
             yield return new WaitForSecondsRealtime(0.35f);
+            Check(!popup.gameObject.activeSelf, "ammo roll closes the popup so search progress remains visible", log);
+            toggle.GetComponent<Button>().onClick.Invoke();
+            yield return null;
             Screenshot(root.parent as RectTransform, Path.Combine(directory, "ammo-tags.png"));
             Check(popup.gameObject.activeInHierarchy, "ammo popup also works in tag mode", log);
             var load = AM.STypeDic[FireArmRoundType.a12g_Shotgun].Values.First(v => v.ObjectID != null).ObjectID.GetGameObjectAsync();

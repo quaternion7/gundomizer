@@ -26,3 +26,5 @@ Optional runtime tests launch H3VR without a headset, install a temporary test p
 Other suites: `-ColdIndexChecks`, `-SearchChecks`, `-AmmoFillChecks`, `-AmmoModChecks`, and `-IntegrationOnly`. Runtime tests and tools are excluded from the distributable mod package. Keep personal notes and machine settings in ignored `.local/`.
 
 `-PatchedLoaderChecks` adds OtherLoaderPatched category and spawn checks to the normal suite; install OtherLoaderPatched and MLOK Rails in the test profile. Also run the normal suite with original OtherLoader and with neither loader enabled.
+
+`-ModularMagazineChecks` checks magazine classification and indexing with ModulAK and the standalone ModulAR2 Magazines pack installed. `-CompatiblePanelChecks` uses those fixtures to check global scope, connector exclusions, preview/spawn behavior and the toolbox tablet, and captures the panel. Both can run with original OtherLoader or OtherLoaderPatched.
