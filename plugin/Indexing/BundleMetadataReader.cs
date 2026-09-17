@@ -121,11 +121,25 @@ namespace Gundomizer.Indexing
                 var connector = component[name];
                 if (connector.IsDummy || connector.TemplateField.ValueType != AssetValueType.Int32) return null;
                 var integrated = component["IsIntegrated"];
-                if (kind == ConnectorKind.Magazine && (integrated.IsDummy || integrated.TemplateField.ValueType != AssetValueType.Bool)) return null;
+                bool isIntegrated = false;
+                if (kind == ConnectorKind.Magazine && !TryBoolean(integrated, out isIntegrated)) return null;
                 result = new ConnectorFacts { Kind = kind, Connector = connector.AsInt,
-                    Integrated = kind == ConnectorKind.Magazine && integrated.AsBool };
+                    Integrated = isIntegrated };
             }
             return result;
+        }
+
+        // Some Unity 5 bundles encode serialized bool fields as UInt8 in their type tree.
+        // Accept only canonical 0/1 bytes; malformed or unfamiliar fields remain unknown.
+        internal static bool TryBoolean(AssetTypeValueField field, out bool value)
+        {
+            value = false;
+            if (field == null || field.IsDummy) return false;
+            if (field.TemplateField.ValueType == AssetValueType.Bool)
+            { value = field.AsBool; return true; }
+            if (field.TemplateField.ValueType != AssetValueType.UInt8 || field.AsByte > 1) return false;
+            value = field.AsByte == 1;
+            return true;
         }
 
         private static bool Local(AssetTypeValueField pointer) => !pointer.IsDummy && !pointer["m_FileID"].IsDummy

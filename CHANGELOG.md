@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+Recognize byte-encoded magazine flags in bundle metadata, enabling lightweight indexing for ModulAK magazines. Existing indexes rebuild once for the corrected reader.
+
 ## 1.0.2
 
 Fix missing buttons with OtherLoaderPatched. Support its native IDs, custom categories, unlocks and bundled spawns while retaining optional support for original OtherLoader. Neither loader is required.

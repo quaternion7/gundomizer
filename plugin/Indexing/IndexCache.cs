@@ -9,7 +9,7 @@ namespace Gundomizer.Indexing
     internal static class IndexCache
     {
         // Bump when field interpretation, alias resolution, or supported script rules change.
-        internal const string Schema = "gundomizer-connectors-1/AssetsTools.NET-3.0.5";
+        internal const string Schema = "gundomizer-connectors-2/AssetsTools.NET-3.0.5";
         private const int MaxCacheBytes = 16 * 1024 * 1024;
         internal static string Hash(byte[] data)
         {

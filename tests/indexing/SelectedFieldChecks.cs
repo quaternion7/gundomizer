@@ -13,6 +13,7 @@ internal static class SelectedFieldChecks
     private static void Require(bool value, string message) { if (!value) throw new Exception("FAIL " + message); }
     internal static void Run()
     {
+        BooleanChecks();
         var pointer = Field("m_Script", AssetValueType.None, Field("m_FileID", AssetValueType.Int32), Field("m_PathID", AssetValueType.Int64));
         var array = Field("unrelated", AssetValueType.Array, Field("size", AssetValueType.Int32), pointer); array.IsArray = true;
         var aligned = Field("flag", AssetValueType.Bool); aligned.IsAligned = true;
@@ -56,5 +57,24 @@ internal static class SelectedFieldChecks
         result = SelectedFields.Read(template, (int)AssetClassID.GameObject, reader, 4, budget);
         Require(result["m_Component"].Children.Count == 0, "empty selected array remains valid");
         Console.WriteLine("PASS selected fields: full-reader agreement, alignment, strings, arrays, early stop and malformed bounds");
+    }
+
+    private static void BooleanChecks()
+    {
+        foreach (var type in new[] { AssetValueType.Bool, AssetValueType.UInt8 })
+        foreach (byte raw in new byte[] { 0, 1 })
+        {
+            var field = Field("IsIntegrated", type).MakeValue(new AssetsFileReader(new MemoryStream(new[] { raw })));
+            bool value;
+            Require(BundleMetadataReader.TryBoolean(field, out value) && value == (raw == 1),
+                "integrated magazine flag accepts bool and canonical Unity byte representations");
+        }
+        bool ignored;
+        Require(!BundleMetadataReader.TryBoolean(null, out ignored), "missing integrated flag is unknown, not false");
+        var invalid = Field("IsIntegrated", AssetValueType.UInt8).MakeValue(new AssetsFileReader(new MemoryStream(new byte[] { 2 })));
+        Require(!BundleMetadataReader.TryBoolean(invalid, out ignored), "noncanonical byte flag is not trusted");
+        var integer = Field("IsIntegrated", AssetValueType.Int32).MakeValue(new AssetsFileReader(new MemoryStream(new byte[] { 1, 0, 0, 0 })));
+        Require(!BundleMetadataReader.TryBoolean(integer, out ignored), "unfamiliar numeric flag layout remains unknown");
+        Console.WriteLine("PASS serialized magazine flags: bool and byte 0/1 accepted; missing, noncanonical and unrelated numeric types rejected");
     }
 }
