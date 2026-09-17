@@ -32,7 +32,7 @@ static class Program
         {
             var shapes = new Dictionary<string, object>();
             foreach (var pair in new[] { new KeyValuePair<string,IconShape[]>("dice",IconGeometry.Dice),
-                new KeyValuePair<string,IconShape[]>("compatible",IconGeometry.GunAndHand) })
+                new KeyValuePair<string,IconShape[]>("compatible",IconGeometry.Link) })
             {
                 var list = new List<object>();
                 foreach (var shape in pair.Value) list.Add(new { points = shape.Points, cutout = shape.Cutout });
