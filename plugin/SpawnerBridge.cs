@@ -119,6 +119,20 @@ namespace Gundomizer
 
         internal static bool IsAvailable(ItemSpawnerID entry) => OtherLoaderBridge.Available(entry);
 
+        internal System.Collections.IEnumerator CollectAll(List<ItemSpawnerID> result)
+        {
+            var ids = OtherLoaderBridge.CatalogIds();
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            float slice = UnityEngine.Time.realtimeSinceStartup;
+            for (int i = 0; i < ids.Count; ++i)
+            {
+                var entry = OtherLoaderBridge.Resolve(ids[i]);
+                if (IsAvailable(entry) && seen.Add(entry.MainObject.ItemID)) result.Add(entry);
+                if (i % 64 == 0 && UnityEngine.Time.realtimeSinceStartup - slice > 0.0015f)
+                { yield return null; slice = UnityEngine.Time.realtimeSinceStartup; }
+            }
+        }
+
         internal void SelectEntry(ItemSpawnerID entry)
         {
             string id = OtherLoaderBridge.SelectionId(entry);

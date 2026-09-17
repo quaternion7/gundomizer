@@ -101,6 +101,17 @@ namespace Gundomizer
         }
 
         internal static string SelectionId(ItemSpawnerID entry) => loader != null && Entries.Contains(entry.MainObject.ItemID) ? entry.MainObject.ItemID : entry.ItemID;
+        internal static List<string> CatalogIds()
+        {
+            var result = new List<string>();
+            foreach (var page in ManagerSingleton<IM>.Instance.PageItemLists)
+                if (page.Key >= ItemSpawnerV2.PageMode.Firearms && page.Key <= ItemSpawnerV2.PageMode.ToolsToys)
+                    result.AddRange(page.Value);
+            // Original OtherLoader keeps custom entries outside the native page registry.
+            if (loader != null) foreach (DictionaryEntry entry in Entries)
+                if ((bool)visible.GetValue(entry.Value)) result.Add((string)entry.Key);
+            return result;
+        }
         internal static bool Available(ItemSpawnerID entry)
         {
             if (entry == null || entry.MainObject == null) return false;

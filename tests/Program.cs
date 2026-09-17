@@ -14,6 +14,20 @@ static class Program
 
     static void Main(string[] args)
     {
+        var compatible = new CompatibleSelection();
+        Check(!compatible.AllItems && compatible.Includes(CompatibilityKind.Magazine, 7), "compatible choices default to current scope with all connectors enabled");
+        compatible.Set(CompatibilityKind.Magazine, 7, false);
+        Check(!compatible.Includes(CompatibilityKind.Magazine, 7) && compatible.Includes(CompatibilityKind.Magazine, 9)
+            && compatible.Includes(CompatibilityKind.Attachment, 7), "connector exclusions are isolated by connector and item kind");
+        var compatibleSnapshot = compatible.Snapshot();
+        compatible.SetScope(true); compatible.Set(CompatibilityKind.Magazine, null, false);
+        Check(!compatible.Includes(CompatibilityKind.Magazine, 9) && compatibleSnapshot.Includes(CompatibilityKind.Magazine, 9)
+            && !compatibleSnapshot.AllItems, "roll snapshot remains stable when scope or type choices change");
+        compatible.Set(CompatibilityKind.Magazine, null, true);
+        Check(!compatible.Includes(CompatibilityKind.Magazine, 7) && compatible.Includes(CompatibilityKind.Magazine, 9),
+            "re-enabling an item kind preserves individual connector exclusions");
+        int compatibleRevision = compatible.Revision; compatible.SetScope(true); compatible.Set(CompatibilityKind.Magazine, 7, false);
+        Check(compatible.Revision == compatibleRevision, "unchanged compatible choices do not cancel a pending roll");
         if (args.Length == 2 && args[0] == "--export-icons")
         {
             var shapes = new Dictionary<string, object>();

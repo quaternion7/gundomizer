@@ -66,7 +66,7 @@ namespace Gundomizer
             separator.raycastTarget = false;
             toggleButton.NeedsHeldContext = true;
             toggleButton.Ready = () => owner.CanClick(true) && variants.Count > 0;
-            toggleButton.Handler = hand => { if (IsOpen) Hide(); else { Refresh(held, true); Redraw(); SetOpen(true); } };
+            toggleButton.Handler = hand => { if (IsOpen) Hide(); else { owner.CloseChoices(true); Refresh(held, true); Redraw(); SetOpen(true); } };
 
             popup = (RectTransform)new GameObject("Gundomizer Ammo Choices", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image),
                 typeof(BoxCollider), typeof(FVRPointable)).transform;

@@ -8,6 +8,7 @@ Randomize items directly in **Item Spawner V2**, including the **toolbox tablet*
 
 - **Random item:** roll from the current category and its subcategories, or your selected tags, across all pages.
 - **Compatible item:** roll items that fit what you're holding, including magazines, attachments, and installed rail adapters.
+- **Compatible choices:** filter item types and connectors; search the current section/tags or **All items** to mix vanilla and modular magazines across categories. Choices last for the game session.
 - **Random ammo:** roll a compatible ammo variant. The arrow beside it opens the variant toggles.
 - **Spawn or preview:** spawn immediately, or select a result to inspect, accept, or reroll.
 - **Auto-fill:** replace loaded rounds and fill the held magazine or weapon, while still spawning the loose round.

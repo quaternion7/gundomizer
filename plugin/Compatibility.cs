@@ -54,6 +54,7 @@ namespace Gundomizer
         }
 
         internal static Query Capture(FVRPhysicalObject held) => new Query(held);
+        internal static Query CaptureFiltered(FVRPhysicalObject held, CompatibleSelection selection) => new Query(held, selection);
 
         // Commit uses a fresh query: a snapshot is never a cached guarantee about changing mounts.
         internal static bool Matches(FVRPhysicalObject held, GameObject candidate)
@@ -68,10 +69,12 @@ namespace Gundomizer
             private readonly List<FVRFireArmClipTriggerWell> clipWells = new List<FVRFireArmClipTriggerWell>();
             private readonly CompatibilityRequirements requirements = new CompatibilityRequirements();
             private readonly HashSet<int> mountTypes = new HashSet<int>();
+            private readonly CompatibleSelection selection;
             internal readonly string Signature;
 
-            internal Query(FVRPhysicalObject held)
+            internal Query(FVRPhysicalObject held, CompatibleSelection selection = null)
             {
+                this.selection = selection;
                 if (held == null) throw new ArgumentNullException(nameof(held));
                 target = held;
                 // Traverse the held assembly once per roll, not again for every candidate prefab.
@@ -112,6 +115,40 @@ namespace Gundomizer
                 Signature = signature.ToString();
             }
 
+            internal List<CompatibilityKind> AvailableKinds()
+            {
+                var result = new List<CompatibilityKind>();
+                if (requirements.MagazineTypes.Count > 0) result.Add(CompatibilityKind.Magazine);
+                if (mountTypes.Count > 0) result.Add(CompatibilityKind.Attachment);
+                if (requirements.ClipTypes.Count > 0) result.Add(CompatibilityKind.Clip);
+                if (requirements.SpeedloaderIds.Count > 0) result.Add(CompatibilityKind.Speedloader);
+                if (requirements.CanMatchFirearm) result.Add(CompatibilityKind.Firearm);
+                return result;
+            }
+
+            internal List<int> Connectors(CompatibilityKind kind)
+            {
+                var result = new List<int>(kind == CompatibilityKind.Attachment ? mountTypes
+                    : kind == CompatibilityKind.Magazine ? requirements.MagazineTypes
+                    : kind == CompatibilityKind.Clip ? requirements.ClipTypes : new HashSet<int>());
+                result.Sort();
+                return result;
+            }
+
+            private bool Included(CompatibilityKind kind, int? connector = null)
+            {
+                if (selection == null) return true;
+                if (!selection.Includes(kind, connector)) return false;
+                if (connector.HasValue) return true;
+                // Even an unknown candidate cannot use a connector family the user entirely
+                // disabled. Avoid speculative attachment loads during a magazine-only roll.
+                var types = kind == CompatibilityKind.Attachment ? mountTypes : kind == CompatibilityKind.Magazine
+                    ? requirements.MagazineTypes : kind == CompatibilityKind.Clip ? requirements.ClipTypes : null;
+                if (types == null) return true;
+                foreach (int type in types) if (selection.Includes(kind, type)) return true;
+                return false;
+            }
+
             internal void Prefilter(List<ItemSpawnerID> candidates)
             {
                 int write = 0;
@@ -126,20 +163,24 @@ namespace Gundomizer
                 if (obj == null) return false;
                 var indexed = useIndex ? ConnectorIndex.Find(obj) : null;
                 var attachment = indexed as FVRFireArmAttachment;
-                if (attachment != null) return mountTypes.Contains((int)attachment.Type);
+                if (attachment != null) return Included(CompatibilityKind.Attachment, (int)attachment.Type) && mountTypes.Contains((int)attachment.Type);
                 var magazine = indexed as FVRFireArmMagazine;
-                if (magazine != null) return !magazine.IsIntegrated && requirements.MagazineTypes.Contains((int)magazine.MagazineType);
+                if (magazine != null) return Included(CompatibilityKind.Magazine, (int)magazine.MagazineType) && !magazine.IsIntegrated && requirements.MagazineTypes.Contains((int)magazine.MagazineType);
                 var clip = indexed as FVRFireArmClip;
-                if (clip != null) return requirements.ClipTypes.Contains((int)clip.ClipType);
+                if (clip != null) return Included(CompatibilityKind.Clip, (int)clip.ClipType) && requirements.ClipTypes.Contains((int)clip.ClipType);
+                if (indexed is FVRFireArm) return Included(CompatibilityKind.Firearm) && requirements.CanMatchFirearm;
                 var persisted = useIndex && indexed == null ? PersistentConnectorIndex.Find(obj) : null;
                 if (persisted != null)
                 {
-                    if (persisted.Kind == Indexing.ConnectorKind.Attachment) return mountTypes.Contains(persisted.Connector);
+                    if (persisted.Kind == Indexing.ConnectorKind.Attachment) return Included(CompatibilityKind.Attachment, persisted.Connector) && mountTypes.Contains(persisted.Connector);
                     if (persisted.Kind == Indexing.ConnectorKind.Magazine)
-                        return !persisted.Integrated && requirements.MagazineTypes.Contains(persisted.Connector);
-                    if (persisted.Kind == Indexing.ConnectorKind.Clip) return requirements.ClipTypes.Contains(persisted.Connector);
+                        return Included(CompatibilityKind.Magazine, persisted.Connector) && !persisted.Integrated && requirements.MagazineTypes.Contains(persisted.Connector);
+                    if (persisted.Kind == Indexing.ConnectorKind.Clip) return Included(CompatibilityKind.Clip, persisted.Connector) && requirements.ClipTypes.Contains(persisted.Connector);
                 }
-                return requirements.CouldMatch(Kind(obj), (int)obj.MagazineType, (int)obj.ClipType, obj.ItemID);
+                var kind = Kind(obj);
+                int? connector = kind == CompatibilityKind.Magazine && (int)obj.MagazineType != 0 ? (int?)obj.MagazineType
+                    : kind == CompatibilityKind.Clip && (int)obj.ClipType != 0 ? (int?)obj.ClipType : null;
+                return Included(kind, connector) && requirements.CouldMatch(kind, (int)obj.MagazineType, (int)obj.ClipType, obj.ItemID);
             }
 
             internal bool Matches(GameObject candidate)
@@ -149,13 +190,13 @@ namespace Gundomizer
                 if (item == null) return false;
                 if (FitsOnto(item)) return true;
                 // Reverse matching must inspect the candidate firearm's own wells and mounts.
-                return requirements.CanMatchFirearm && item is FVRFireArm && Capture(item).FitsOnto(target);
+                return Included(CompatibilityKind.Firearm) && requirements.CanMatchFirearm && item is FVRFireArm && Capture(item).FitsOnto(target);
             }
 
             private bool FitsOnto(FVRPhysicalObject candidate)
             {
                 var attachment = candidate as FVRFireArmAttachment;
-                if (attachment != null)
+                if (attachment != null && Included(CompatibilityKind.Attachment, (int)attachment.Type))
                 {
                     if (!attachment.CanAttach()) return false;
                     foreach (var mount in mounts)
@@ -163,7 +204,7 @@ namespace Gundomizer
                 }
 
                 var magazine = candidate as FVRFireArmMagazine;
-                if (magazine != null)
+                if (magazine != null && Included(CompatibilityKind.Magazine, (int)magazine.MagazineType))
                 {
                     // Native connector/override/belt-box rules; an occupied well permits a spare.
                     if (candidate.GetComponentInChildren<FVRFireArmReloadTriggerMag>(true) == null) return false;
@@ -182,7 +223,7 @@ namespace Gundomizer
                 }
 
                 var clip = candidate as FVRFireArmClip;
-                if (clip != null)
+                if (clip != null && Included(CompatibilityKind.Clip, (int)clip.ClipType))
                 {
                     if (candidate.GetComponentInChildren<FVRFireArmClipTriggerClip>(true) == null) return false;
                     foreach (var well in clipWells)
@@ -190,7 +231,7 @@ namespace Gundomizer
                 }
 
                 var loader = candidate as Speedloader;
-                if (loader != null)
+                if (loader != null && Included(CompatibilityKind.Speedloader))
                 {
                     // Preserve authored speedloader compatibility, including exotic devices.
                     foreach (var obj in objects)

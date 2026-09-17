@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+Add compatible item choices: type and connector toggles, with current-section/tag or all-item scope. The global scope includes modular magazines stored under Firearms.
+
 Recognize byte-encoded magazine flags in bundle metadata, enabling lightweight indexing for ModulAK magazines. Existing indexes rebuild once for the corrected reader.
 
 ## 1.0.2

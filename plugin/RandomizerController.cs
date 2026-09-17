@@ -16,6 +16,8 @@ namespace Gundomizer
         private RandomizerButton compatibleButton;
         private RectTransform uiRoot;
         private AmmoPanel ammoPanel;
+        private CompatiblePanel compatiblePanel;
+        private int compatibleRevision = -1;
         private readonly List<KeyValuePair<Transform, Vector3>> pagerOffsets = new List<KeyValuePair<Transform, Vector3>>();
         private GameObject tooltip;
         private Text tooltipText;
@@ -62,6 +64,10 @@ namespace Gundomizer
         }
 
         private bool Visible => spawner != null && bridge != null && bridge.IsBrowsingSection;
+        internal bool IsTagMode => bridge.IsTagMode;
+        internal string ScopeDescription => bridge.ScopeDescription;
+        internal void CloseChoices(bool openingAmmo)
+        { if (openingAmmo) compatiblePanel?.Hide(); else ammoPanel?.Hide(); }
 
         internal void RefreshPreview(string selectedId)
         {
@@ -98,6 +104,7 @@ namespace Gundomizer
             cachedHeldItem = playerNearby ? Compatibility.HeldItem(pointingHand) : null;
             cachedHeldName = Compatibility.Name(cachedHeldItem);
             if (ammoPanel != null) ammoPanel.Refresh(cachedHeldItem);
+            if (compatiblePanel != null) compatiblePanel.Refresh(cachedHeldItem);
         }
 
         private void Update()
@@ -112,18 +119,21 @@ namespace Gundomizer
                 playerNearby = false;
                 tooltip.SetActive(false);
                 if (ammoPanel != null) ammoPanel.Hide();
+                if (compatiblePanel != null) compatiblePanel.Hide();
                 return;
             }
             if (Time.unscaledTime >= nextHeldItemCheck) RefreshHeldItem();
             if (ammoPanel != null) ammoPanel.Update();
+            if (compatiblePanel != null) compatiblePanel.Update();
             string message = null;
             if (busy || Time.unscaledTime < statusUntil) message = status;
             else if (compatibleButton.Hovered)
                 message = "Random COMPATIBLE item of held item [" +
-                    (cachedHeldItem == null ? "none" : cachedHeldName) + "] (" + bridge.ScopeDescription + ")";
+                    (cachedHeldItem == null ? "none" : cachedHeldName) + "] (" + compatiblePanel.ScopeDescription + ")";
             else if (randomButton.Hovered) message = "Random Item (" + bridge.ScopeDescription + ")";
-            else if (ammoPanel != null) message = ammoPanel.Tooltip;
+            else message = compatiblePanel?.Tooltip ?? ammoPanel?.Tooltip;
             if (ammoPanel != null && ammoPanel.IsOpen && !busy) message = null;
+            if (compatiblePanel != null && compatiblePanel.IsOpen && !busy) message = null;
             tooltip.SetActive(!string.IsNullOrEmpty(message));
             if (message != null && tooltipText.text != message)
             {
@@ -143,6 +153,8 @@ namespace Gundomizer
             if (compatible) RefreshHeldItem(pointingHand);
             var held = compatible ? cachedHeldItem : null;
             if (compatible && held == null) return;
+            if (compatible && !compatiblePanel.HasChoices) return;
+            if (compatible) compatiblePanel.Hide();
             busy = true;
             activeButton = button;
             cancelRequested = false;
@@ -160,6 +172,7 @@ namespace Gundomizer
             RefreshHeldItem(hand);
             var variants = ammoPanel.EnabledVariants();
             if (cachedHeldItem == null || variants.Count == 0) return;
+            ammoPanel.Hide();
             busy = true;
             activeButton = ammoPanel.RollButton;
             cancelRequested = false;
@@ -173,6 +186,7 @@ namespace Gundomizer
             List<AmmoCatalog.Variant> ammo = null, int ammoRevision = -1, bool autoFill = false)
         {
             var metrics = new RollMetrics { Kind = ammo != null ? "Ammo" : compatible ? "Compatible" : "Random" };
+            compatibleRevision = compatible && ammo == null ? CompatibleSelection.Shared.Revision : -1;
             return Guarded(Roll(compatible, held, hand, spawnInstantly, metrics, ammo, ammoRevision, autoFill), metrics);
         }
 
@@ -209,6 +223,7 @@ namespace Gundomizer
                 (roll as IDisposable)?.Dispose();
                 busy = false;
                 activeButton = null;
+                compatibleRevision = -1;
                 cancelRequested = false;
                 nextClick = Time.unscaledTime + 0.25f;
                 metrics.Log();
@@ -309,12 +324,27 @@ namespace Gundomizer
         private IEnumerator Roll(bool compatible, FVRPhysicalObject held, FVRViveHand hand, bool spawnInstantly,
             RollMetrics metrics, List<AmmoCatalog.Variant> ammo, int ammoRevision, bool autoFill)
         {
-            var context = ammo == null ? bridge.CaptureContext() : null;
+            var selection = compatible && ammo == null ? CompatibleSelection.Shared.Snapshot() : null;
+            var context = ammo == null && (selection == null || !selection.AllItems) ? bridge.CaptureContext() : null;
             var variants = new Dictionary<string, AmmoCatalog.Variant>(StringComparer.Ordinal);
             if (ammo != null) foreach (var variant in ammo)
                 if (!variants.ContainsKey(variant.Entry.ItemID)) variants.Add(variant.Entry.ItemID, variant);
-            var query = compatible && ammo == null ? Compatibility.Capture(held) : null;
-            var candidates = ammo == null ? bridge.CaptureSection() : new List<ItemSpawnerID>();
+            var query = selection == null ? null : Compatibility.CaptureFiltered(held, selection);
+            var candidates = ammo == null && (selection == null || !selection.AllItems) ? bridge.CaptureSection() : new List<ItemSpawnerID>();
+            if (selection != null && selection.AllItems)
+            {
+                Progress("Collecting compatible choices across all items...");
+                var catalog = bridge.CollectAll(candidates);
+                try
+                {
+                    while (catalog.MoveNext())
+                    {
+                        yield return catalog.Current;
+                        if (!StillValid(context, compatible, held, hand, false, ammoRevision)) yield break;
+                    }
+                }
+                finally { (catalog as IDisposable)?.Dispose(); }
+            }
             if (ammo != null) foreach (var variant in variants.Values) candidates.Add(variant.Entry);
             metrics.SectionCount = candidates.Count;
             {
@@ -422,7 +452,8 @@ namespace Gundomizer
                     // Recheck live hands and range once at commit, even between background polls.
                     if (!StillValid(context, compatible, held, hand, true, ammoRevision) || !SpawnerBridge.IsAvailable(entry)) yield break;
                     // Recheck actual mounts after loading; no yields occur before selecting or spawning.
-                    if (ammo != null ? !AmmoCatalog.Matches(held, prefab, variants[entry.ItemID]) : compatible && !Compatibility.Matches(held, prefab)) continue;
+                    if (ammo != null ? !AmmoCatalog.Matches(held, prefab, variants[entry.ItemID])
+                        : compatible && !Compatibility.CaptureFiltered(held, selection).Matches(prefab)) continue;
                     if (!spawnInstantly)
                     {
                         SelectEntry(entry, ammo != null);
@@ -465,7 +496,8 @@ namespace Gundomizer
                 Message("No spawnable enabled ammo variants for " + Compatibility.Name(held) + ".");
                 yield break;
             }
-            string scope = bridge.IsTagMode ? "matching these tags" : "in this section";
+            string scope = selection != null && selection.AllItems ? "among enabled types across all items"
+                : (bridge.IsTagMode ? "matching these tags" : "in this section") + (selection == null ? "" : " and enabled types");
             Message(compatible ? "No compatible items " + scope + " for " + Compatibility.Name(held) + "."
                 : "No spawnable items " + scope + ".");
         }
@@ -481,6 +513,8 @@ namespace Gundomizer
             {
                 Message("Ammo choices changed. Randomizer cancelled."); return false;
             }
+            if (compatible && ammoRevision < 0 && compatibleRevision >= 0 && compatibleRevision != CompatibleSelection.Shared.Revision)
+            { Message("Compatible choices changed. Randomizer cancelled."); return false; }
             // Loading uses the 1 Hz cache; click and commit are the only on-demand hand reads.
             if (compatible && checkLiveHand) RefreshHeldItem(hand);
             if (compatible && !playerNearby)
@@ -563,8 +597,10 @@ namespace Gundomizer
             rainbowTexture = MakeRainbowTexture();
             randomButton = CloneButton(template, parent, "Randomizer", false, left + diceWidth * 0.5f, y, diceWidth);
             compatibleButton = CloneButton(template, parent, "Compatible", true,
-                left + diceWidth + gap + compatibleWidth * 0.5f, y, compatibleWidth);
-            float ammoLeft = left + diceWidth + gap + compatibleWidth + 16f;
+                left + diceWidth + gap + (compatibleWidth - CompatiblePanel.ToggleWidth) * 0.5f, y, compatibleWidth - CompatiblePanel.ToggleWidth);
+            float compatibleRight = left + diceWidth + gap + compatibleWidth - CompatiblePanel.ToggleWidth;
+            compatiblePanel = new CompatiblePanel(this, parent, template, compatibleButton, compatibleRight, y);
+            float ammoLeft = compatibleRight + CompatiblePanel.ToggleWidth + 16f;
             ammoPanel = new AmmoPanel(this, spawner, parent, template, ammoLeft, y);
             // Make room beside the native tag pager without shrinking its text or hit targets.
             var tagPrev = (RectTransform)spawner.BTN_TagPagePrev.transform;
