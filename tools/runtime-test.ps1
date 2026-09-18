@@ -4,6 +4,7 @@ param(
     [string]$ProfilePath,
     [string]$SteamPath,
     [string]$RunDirectory,
+    [switch]$UseInstalledBuild,
     [switch]$MeasureMods,
     [switch]$IntegrationOnly,
     [switch]$IndexChecks,
@@ -37,7 +38,13 @@ if ($Action -eq 'Start') {
     if (Test-Path -LiteralPath $probe) { throw 'A runtime probe is already installed; finish its session first.' }
     & dotnet build (Join-Path $repo 'tests\runtime\RuntimeProbe.csproj') -c Release
     if ($LASTEXITCODE -ne 0) { throw 'Runtime probe build failed.' }
-    & (Join-Path $PSScriptRoot 'deploy-profile.ps1') -ProfilePath $profile
+    if ($UseInstalledBuild) {
+        if (-not (Test-Path -LiteralPath (Join-Path $profile 'BepInEx\plugins\quaternion-Gundomizer\quaternion.gundomizer.dll'))) {
+            throw 'The profile must already contain Gundomizer when using -UseInstalledBuild.'
+        }
+    } else {
+        & (Join-Path $PSScriptRoot 'deploy-profile.ps1') -ProfilePath $profile
+    }
     if (-not $RunDirectory) { $RunDirectory = Join-Path $repo ('temp\runtime-' + (Get-Date -Format 'yyyyMMdd-HHmmss')) }
     if (Test-Path -LiteralPath $RunDirectory) { throw 'Use a new output directory for each launch.' }
     New-Item -ItemType Directory -Path $RunDirectory | Out-Null

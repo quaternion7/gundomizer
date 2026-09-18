@@ -1,6 +1,6 @@
 # Gundomizer
 
-![Complete Item Spawner V2 with Gundomizer's rainbow buttons](https://raw.githubusercontent.com/quaternion7/gundomizer/main/docs/images/item-spawner.png)
+![Item Spawner V2 with Gundomizer's rainbow buttons and compatible item options open](https://raw.githubusercontent.com/quaternion7/gundomizer/main/docs/images/item-spawner.png)
 
 Randomize items directly in **Item Spawner V2**, including the **toolbox tablet**, in classic and tag-search modes.
 
