@@ -8,7 +8,6 @@ namespace Gundomizer
 {
     internal sealed class AmmoPanel
     {
-        internal const float GroupWidth = 200f;
         private const int PageSize = 7;
         private const float Width = 1200f;
         private const float Height = 850f;
@@ -33,17 +32,19 @@ namespace Gundomizer
         internal RandomizerButton RollButton => rollButton;
 
         internal AmmoPanel(RandomizerController owner, ItemSpawnerV2 spawner, RectTransform root,
-            GameObject template, float left, float y)
+            GameObject template, float left, float y, float side)
         {
             this.owner = owner;
             this.template = template;
-            rollButton = owner.CloneButton(template, root, "Ammo", false, left + 60f, y, 120f);
+            rollButton = owner.CloneButton(template, root, "Ammo", false, left + side * .5f, y, side);
             rollButton.Icon.Ammo = true; rollButton.Icon.SetVerticesDirty();
+            ButtonFactory.LayoutFooter(rollButton, side, side);
             rollButton.NeedsHeldContext = true;
             rollButton.Ready = () => owner.CanClick(true) && enabledCount > 0;
             rollButton.Handler = owner.ClickAmmo;
-            toggleButton = owner.CloneButton(template, root, "Ammo choices", false, left + 160f, y, 80f);
+            toggleButton = owner.CloneButton(template, root, "Ammo choices", false, left + side + ButtonFactory.DropdownWidth * .5f, y, ButtonFactory.DropdownWidth);
             toggleButton.Icon.Dropdown = true; toggleButton.Icon.SetVerticesDirty();
+            ButtonFactory.LayoutFooter(toggleButton, ButtonFactory.DropdownWidth, side);
             toggleButton.Rainbow = false;
             toggleButton.Background.texture = Texture2D.whiteTexture;
             toggleButton.Background.color = new Color(0.13f, 0.16f, 0.19f, 1f);

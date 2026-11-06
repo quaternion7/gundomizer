@@ -94,6 +94,12 @@ public static class CompatiblePanelChecks
             yield return new WaitForEndOfFrame();
             AccessTools.Method(typeof(ReadmePreview), "Capture").Invoke(null, new object[] { root.parent as RectTransform, Path.Combine(directory, "compatible-panel.png") });
             AccessTools.Method(typeof(ReadmePreview), "Capture").Invoke(null, new object[] { Get<RectTransform>(panel, "popup"), Path.Combine(directory, "compatible-panel-closeup.png") });
+            Call(panel, "Hide"); yield return null; yield return new WaitForEndOfFrame();
+            AccessTools.Method(typeof(ReadmePreview), "Capture").Invoke(null, new object[] { root.parent as RectTransform, Path.Combine(directory, "wall-tags.png") });
+            spawner.BTN_SimpleMode_SwitchToSimpleMode(); yield return null; yield return new WaitForEndOfFrame();
+            AccessTools.Method(typeof(ReadmePreview), "Capture").Invoke(null, new object[] { root.parent as RectTransform, Path.Combine(directory, "wall-classic.png") });
+            CaptureFooter(root, Path.Combine(directory, "wall-footer.png"));
+            spawner.BTN_SimpleMode_SwitchToTagSearch(); yield return null;
 
             // Execute real rolls in both modes through the actual button/owner path.
             foreach (bool spawn in new[] { false, true })
@@ -123,6 +129,11 @@ public static class CompatiblePanelChecks
             portable.BTN_SetPageMode(2); portable.BTN_SimpleMode_SwitchToTagSearch();
             instant.Value = false; yield return new WaitForSecondsRealtime(.4f); Call(portableController, "RefreshHeldItem", hands[0]);
             Check((bool)Prop(Get<object>(portableController, "compatiblePanel"), "HasChoices"), "tablet shares current compatible choices", log);
+            portable.BTN_SimpleMode_SwitchToSimpleMode(); yield return null; yield return new WaitForEndOfFrame();
+            var portableRoot = Get<RectTransform>(portableController, "uiRoot");
+            AccessTools.Method(typeof(ReadmePreview), "Capture").Invoke(null, new object[] { portableRoot.parent as RectTransform, Path.Combine(directory, "tablet-classic.png") });
+            CaptureFooter(portableRoot, Path.Combine(directory, "tablet-footer.png"));
+            portable.BTN_SimpleMode_SwitchToTagSearch(); yield return null;
             var beforeTablet = new HashSet<int>(Object.FindObjectsOfType<FVRFireArmMagazine>().Select(m => m.GetInstanceID()));
             Call(Get<object>(portableController, "allCompatibleButton"), "Activate", hands[0]);
             deadline = Time.realtimeSinceStartup + 180;
@@ -211,6 +222,9 @@ public static class CompatiblePanelChecks
             var b = RectTransformUtility.CalculateRelativeRectTransformBounds(panel, button.transform);
             if (first) { bounds = b; first = false; } else bounds.Encapsulate(b);
         }
+        var corner = panel.InverseTransformPoint(root.TransformPoint(new Vector3(root.rect.xMin, root.rect.yMin, 0)));
+        bounds.SetMinMax(new Vector3(Mathf.Min(bounds.min.x, corner.x - 8), Mathf.Min(bounds.min.y, corner.y - 8), bounds.min.z),
+            new Vector3(bounds.max.x + 30, bounds.max.y + 30, bounds.max.z));
         var obj = new GameObject("Spawner footer capture"); var camera = obj.AddComponent<Camera>();
         var target = new RenderTexture(1200, 300, 24); var pixels = new Texture2D(1200, 300, TextureFormat.RGB24, false);
         var previous = RenderTexture.active;
@@ -219,7 +233,7 @@ public static class CompatiblePanelChecks
         {
             foreach (var go in layers.Keys) go.layer = 31;
             camera.transform.rotation = panel.rotation; camera.transform.position = panel.TransformPoint(bounds.center) - panel.forward * 2;
-            camera.orthographic = true; camera.orthographicSize = Mathf.Max(bounds.size.y * Mathf.Abs(panel.lossyScale.y), bounds.size.x * Mathf.Abs(panel.lossyScale.x) / 4) * .6f;
+            camera.orthographic = true; camera.orthographicSize = Mathf.Max(bounds.size.y * Mathf.Abs(panel.lossyScale.y), bounds.size.x * Mathf.Abs(panel.lossyScale.x) / 4) * .5f;
             camera.nearClipPlane = .01f; camera.farClipPlane = 4; camera.cullingMask = 1 << 31;
             camera.clearFlags = CameraClearFlags.SolidColor; camera.backgroundColor = new Color(.04f, .04f, .04f);
             camera.targetTexture = target; camera.Render(); RenderTexture.active = target;

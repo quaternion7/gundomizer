@@ -18,6 +18,7 @@ namespace Gundomizer
         internal static readonly IconShape[] Link = MakeLink();
         internal static readonly IconShape[] Grid = MakeGrid();
         internal static readonly IconShape[] Globe = MakeGlobe();
+        internal static readonly IconShape[] LinkBadge = { RoundedRect(58, 60, 42, 38, 7, true) };
         internal static readonly IconShape[] Cartridge = {
             new IconShape(false, 34,35, 34,23, 50,5, 66,23, 66,35),
             new IconShape(false, 32,39, 68,39, 68,85, 32,85),

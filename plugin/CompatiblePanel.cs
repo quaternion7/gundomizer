@@ -9,7 +9,7 @@ namespace Gundomizer
 {
     internal sealed class CompatiblePanel
     {
-        internal const float ToggleWidth = 60f;
+        internal const float ToggleWidth = ButtonFactory.DropdownWidth;
         private const float Width = 1200f, Height = 900f;
         private const int PageSize = 4;
         private readonly RandomizerController owner;
@@ -30,11 +30,12 @@ namespace Gundomizer
         internal string Tooltip => toggle.Hovered ? "Compatible filters" : null;
 
         internal CompatiblePanel(RandomizerController owner, RectTransform root, GameObject template,
-            RandomizerButton roll, float left, float y)
+            RandomizerButton roll, float left, float y, float height)
         {
             this.owner = owner; this.template = template;
             toggle = owner.CloneButton(template, root, "Compatible choices", false, left + ToggleWidth * .5f, y, ToggleWidth);
             toggle.Icon.Dropdown = true; toggle.Icon.SetVerticesDirty(); toggle.Rainbow = false;
+            ButtonFactory.LayoutFooter(toggle, ToggleWidth, height);
             toggle.NeedsHeldContext = true;
             toggle.Ready = () => owner.CanClick(true);
             toggle.Handler = hand => { if (IsOpen) Hide(); else { owner.CloseChoices(false); SetOpen(true); Redraw(); } };

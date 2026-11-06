@@ -8,6 +8,29 @@ namespace Gundomizer
 {
     internal static class ButtonFactory
     {
+        internal const float DropdownWidth = 60f;
+
+        internal static void LayoutFooter(RandomizerButton button, float width, float height)
+        {
+            var rect = (RectTransform)button.transform;
+            var old = rect.rect.size;
+            rect.sizeDelta = new Vector2(width / Mathf.Abs(rect.localScale.x), height / Mathf.Abs(rect.localScale.y));
+            var box = button.GetComponent<BoxCollider>();
+            if (box != null) box.size = new Vector3(box.size.x * rect.rect.width / old.x, box.size.y * rect.rect.height / old.y, box.size.z);
+            if (button.Background.transform != rect)
+            {
+                button.Background.rectTransform.offsetMin = new Vector2(2, 2);
+                button.Background.rectTransform.offsetMax = new Vector2(-2, -2);
+            }
+            if (button.Icon.Dropdown)
+            {
+                var icon = button.Icon.rectTransform;
+                icon.anchorMin = icon.anchorMax = new Vector2(.5f, .5f);
+                icon.sizeDelta = new Vector2(height * .36f / Mathf.Abs(rect.localScale.x), height * .36f / Mathf.Abs(rect.localScale.y));
+                icon.anchoredPosition3D = new Vector3(0, 0, -.01f);
+            }
+        }
+
         internal static RandomizerButton Create(GameObject template, RectTransform parent, string text,
             bool compatible, float x, float y, float width, Texture2D rainbowTexture, RandomizerController owner = null)
         {

@@ -19,8 +19,9 @@ namespace Gundomizer
             var origin = new Vector2(rect.center.x - viewWidth * scale * 0.5f, rect.center.y + 50f * scale);
             if (Compatible && !Ammo && !Dropdown)
             {
-                Draw(mesh, AllItems ? IconGeometry.Globe : IconGeometry.Grid, origin + new Vector2(16 * scale, 0), scale * .68f);
-                Draw(mesh, IconGeometry.Link, origin + new Vector2(29 * scale, -58 * scale), scale * .42f);
+                Draw(mesh, AllItems ? IconGeometry.Globe : IconGeometry.Grid, origin + new Vector2(3 * scale, 0), scale * .82f);
+                Draw(mesh, IconGeometry.LinkBadge, origin, scale);
+                Draw(mesh, IconGeometry.Link, origin + new Vector2(58 * scale, -60 * scale), scale * .42f);
             }
             else Draw(mesh, Ammo ? IconGeometry.Cartridge : Dropdown ? IconGeometry.Chevron : IconGeometry.Dice, origin, scale);
         }

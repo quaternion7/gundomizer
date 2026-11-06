@@ -593,12 +593,13 @@ namespace Gundomizer
             var nativeListPrev = RectTransformUtility.CalculateRelativeRectTransformBounds(parent, spawner.BTN_ListPagePrev.transform);
             float rowBudget = nativeListPrev.min.x - 20f - (nativeTagNext.max.x - nativeTagPrev.min.x) - 30f - left;
             // Fit the four actions while retaining the native tag/list pager hit targets.
-            float diceWidth = Mathf.Floor(Mathf.Min(height, (rowBudget - AmmoPanel.GroupWidth - CompatiblePanel.ToggleWidth - gap * 2 - 16f) / 3));
+            float diceWidth = Mathf.Floor(Mathf.Min(height, (rowBudget - ButtonFactory.DropdownWidth * 2 - gap * 2 - 16f) / 4));
             if (diceWidth < height * .7f) throw new InvalidOperationException("Insufficient space for the randomizer controls.");
             float compatibleWidth = diceWidth + CompatiblePanel.ToggleWidth;
             if (diceWidth * 2 + compatibleWidth + gap * 2 > right - left)
                 throw new InvalidOperationException("Insufficient free space beside native paging controls.");
-            float y = source.localPosition.y;
+            float margin = left - parent.rect.xMin;
+            float y = parent.rect.yMin + margin + diceWidth * .5f;
             // A sibling of the native mode panels stays visible in both modes. Copy the classic
             // coordinate space exactly, so button positions, scale, and collider sizes stay unchanged.
             uiRoot = (RectTransform)new GameObject("Gundomizer Controls", typeof(RectTransform)).transform;
@@ -612,20 +613,23 @@ namespace Gundomizer
             parent = uiRoot;
             rainbowTexture = MakeRainbowTexture();
             randomButton = CloneButton(template, parent, "Randomizer", false, left + diceWidth * 0.5f, y, diceWidth);
+            ButtonFactory.LayoutFooter(randomButton, diceWidth, diceWidth);
             compatibleButton = CloneButton(template, parent, "Compatible section", true, left + diceWidth + gap + diceWidth * .5f, y, diceWidth);
+            ButtonFactory.LayoutFooter(compatibleButton, diceWidth, diceWidth);
             float allLeft = left + diceWidth * 2 + gap * 2;
             allCompatibleButton = CloneButton(template, parent, "Compatible all items", true,
                 allLeft + (compatibleWidth - CompatiblePanel.ToggleWidth) * .5f, y, compatibleWidth - CompatiblePanel.ToggleWidth);
             allCompatibleButton.Handler = ClickAllItems;
+            ButtonFactory.LayoutFooter(allCompatibleButton, diceWidth, diceWidth);
             allCompatibleButton.Icon.AllItems = true; allCompatibleButton.Icon.SetVerticesDirty();
             float compatibleRight = allLeft + compatibleWidth - CompatiblePanel.ToggleWidth;
-            compatiblePanel = new CompatiblePanel(this, parent, template, allCompatibleButton, compatibleRight, y);
+            compatiblePanel = new CompatiblePanel(this, parent, template, allCompatibleButton, compatibleRight, y, diceWidth);
             float ammoLeft = compatibleRight + CompatiblePanel.ToggleWidth + 16f;
-            ammoPanel = new AmmoPanel(this, spawner, parent, template, ammoLeft, y);
+            ammoPanel = new AmmoPanel(this, spawner, parent, template, ammoLeft, y, diceWidth);
             // Make room beside the native tag pager without shrinking its text or hit targets.
             var tagPrev = (RectTransform)spawner.BTN_TagPagePrev.transform;
             var tagNext = (RectTransform)spawner.BTN_TagPageNext.transform;
-            float shift = Mathf.Max(0, ammoLeft + AmmoPanel.GroupWidth + 30f
+            float shift = Mathf.Max(0, ammoLeft + diceWidth + ButtonFactory.DropdownWidth + 30f
                 - RectTransformUtility.CalculateRelativeRectTransformBounds(parent, tagPrev).min.x);
             float nextRight = RectTransformUtility.CalculateRelativeRectTransformBounds(parent, tagNext).max.x;
             float listLeft = RectTransformUtility.CalculateRelativeRectTransformBounds(parent, spawner.BTN_ListPagePrev.transform).min.x;

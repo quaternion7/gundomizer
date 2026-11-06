@@ -8,7 +8,7 @@ Add a compact rainbow build dice beside the workshop platform cog. Reroll parts 
 
 Shorten tooltips, status messages and config descriptions; remove repeated filter hints.
 
-Split compatible rolls into current-section and all-items buttons, with grid/globe icons and a small link beneath each. Filters apply only to all-items rolls.
+Split compatible rolls into current-section and all-items buttons, with grid/globe icons and lower-right link badges. Filters apply only to all-items rolls. Square footer buttons, matching dropdowns, and equal edge spacing.
 
 ## 1.1.0
 
