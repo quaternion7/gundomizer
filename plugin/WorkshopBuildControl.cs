@@ -115,7 +115,7 @@ namespace Gundomizer
             if (Busy) { cancel = true; return; }
             if (slot == null || slot.HeldObject == null || !HasModularTarget()) return;
             cancel = false; Busy = true; Changed = 0; SkinsChanged = 0;
-            Status = "Randomizing build… Click again to cancel.";
+            Status = "Rolling build…\nClick again to cancel.";
             roll = StartCoroutine(Randomize(slot.HeldObject));
         }
 
@@ -149,22 +149,22 @@ namespace Gundomizer
                     catch (Exception ex)
                     {
                         Plugin.Log.LogWarning("Could not inspect modular build: " + ex);
-                        Status = "Could not inspect this build. Check logs.";
+                        Status = "Build unavailable. See log.";
                         yield break;
                     }
-                    if (next == null) { Status = "Randomized " + Changed + " parts and " + SkinsChanged + " skins."; yield break; }
+                    if (next == null) { Status = "Randomized " + Changed + " parts, " + SkinsChanged + " skins."; yield break; }
                     // Bound repeated changes across snapshots of an unusual author graph.
-                    if (visited.Count + skinned.Count >= 512) { Status = "Build has too many changing slots. Roll stopped."; yield break; }
+                    if (visited.Count + skinned.Count >= 512) { Status = "Slot limit reached."; yield break; }
                     if (skins) skinned.Add(next); else visited.Add(point);
                     string message;
                     if (!(skins ? ModularWorkshopBridge.TryRandomizeBuildSkin(next, out message) : ModularWorkshopBridge.TryRandomizeBuildSlot(next, out message)))
                     { Status = message; yield break; }
                     if (skins) ++SkinsChanged; else ++Changed;
-                    Status = "Randomizing build… " + Changed + " parts, " + SkinsChanged + " skins. Click again to cancel.";
+                    Status = Changed + " parts, " + SkinsChanged + " skins\nClick again to cancel.";
                     // Native destruction/menu creation settles before the next graph snapshot.
                     yield return null;
                 }
-                Status = "Build randomization cancelled.";
+                Status = "Roll cancelled.";
             }
             finally { Busy = false; roll = null; statusUntil = Time.unscaledTime + 3; }
         }

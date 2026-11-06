@@ -6,6 +6,8 @@ Add optional Modular Workshop dice buttons fixed below part/skin menus, clear of
 
 Add a compact rainbow build dice beside the workshop platform cog. Reroll parts and skins, including nested slots and the receiver skin, through native menus. Click again to cancel; undocking cancels automatically.
 
+Shorten tooltips, status messages and config descriptions; remove repeated filter hints.
+
 ## 1.1.0
 
 Add compatible item choices: type and connector toggles, with current-section/tag or all-item scope. The global scope includes modular magazines stored under Firearms.

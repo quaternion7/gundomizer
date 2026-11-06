@@ -28,8 +28,8 @@ namespace Gundomizer
         private int page, revision = -1;
         internal bool IsOpen => popup.gameObject.activeSelf;
         internal bool HasChoices { get; private set; }
-        internal string ScopeDescription => CompatibleSelection.Shared.AllItems ? "across all items" : owner.ScopeDescription;
-        internal string Tooltip => toggle.Hovered ? "Choose compatible item types and search scope for " + Compatibility.Name(held) : null;
+        internal string ScopeDescription => CompatibleSelection.Shared.AllItems ? "All items" : owner.ScopeDescription;
+        internal string Tooltip => toggle.Hovered ? "Compatible filters" : null;
 
         internal CompatiblePanel(RandomizerController owner, RectTransform root, GameObject template,
             RandomizerButton roll, float left, float y)
@@ -60,7 +60,7 @@ namespace Gundomizer
             var blocker = popup.GetComponent<BoxCollider>(); blocker.center = new Vector3(Width / 2, Height / 2, 2);
             blocker.size = new Vector3(Width, Height, 1);
             popup.GetComponent<FVRPointable>().MaxPointingRange = roll.MaxPointingRange;
-            Label("Title", "Compatible choices", 32, 990, 1000, 70, 46);
+            Label("Title", "Compatible filters", 32, 990, 1000, 70, 46);
             Button("Close", "X", 1125, 990, 90, hand => Hide());
             heldLabel = Label("Held", "", 32, 930, 1136, 60, 34);
             section = Button("Section", "Current section", 305, 850, 545, hand => SetScope(false));
@@ -137,7 +137,7 @@ namespace Gundomizer
             var choices = CompatibleSelection.Shared; revision = choices.Revision;
             displayedScope = ScopeDescription;
             heldLabel.text = "Held: " + Compatibility.Name(held);
-            hint.text = choices.AllItems ? "All categories, including modular magazines under Firearms." : "Use the spawner's current section or selected tags.";
+            hint.text = "";
             all.Caption.text = (choices.AllItems ? "[x] " : "[ ] ") + "All items";
             connectors.Clear(); HasChoices = false;
             for (int i = 0; i < kinds.Count; ++i)
@@ -171,8 +171,8 @@ namespace Gundomizer
             }
             previous.gameObject.SetActive(page > 0); next.gameObject.SetActive(page + 1 < pages);
             pageLabel.text = pages > 1 ? (page + 1) + " / " + pages : "";
-            summary.text = HasChoices ? "Next roll: compatible items " + ScopeDescription + "."
-                : held == null ? "Hold an item to see its compatible types." : "No types selected or available. Enable a type to roll.";
+            summary.text = HasChoices ? "" : held == null ? "Hold an item."
+                : available.Count == 0 ? "No compatible types." : "Select a type or connector.";
         }
 
         private Text Label(string name, string value, float x, float y, float width, float height, int size)

@@ -182,9 +182,9 @@ namespace Gundomizer
         }
 
         internal string Tooltip => rollButton.Hovered
-            ? (enabledCount == 0 ? "Hold an ammo-using item and enable at least one ammo variant."
-                : "Random compatible ammo for " + Compatibility.Name(held) + " (" + enabledCount + " variants enabled)")
-            : toggleButton.Hovered ? "Choose ammo variants for " + Compatibility.Name(held) : null;
+            ? (held == null ? "Hold an item." : variants.Count == 0 ? "No compatible ammo."
+                : enabledCount == 0 ? "Select ammo types." : "Random ammo\nHeld: " + Compatibility.Name(held))
+            : toggleButton.Hovered ? "Ammo types" : null;
 
         private void SetOpen(bool open)
         {
@@ -198,7 +198,7 @@ namespace Gundomizer
         {
             if (revision != AmmoSelection.Shared.Revision) Redraw();
             if (!IsOpen) return;
-            string description = "Choose which ammo variants to include.";
+            string description = "";
             for (int i = 0; i < rows.Count; ++i)
             {
                 int index = page * PageSize + i;
@@ -230,9 +230,9 @@ namespace Gundomizer
             foreach (var variant in variants) if (AmmoSelection.Shared.Includes(variant.Key)) ++enabledCount;
             int pageCount = Math.Max(1, (variants.Count + PageSize - 1) / PageSize);
             page = Math.Max(0, Math.Min(page, pageCount - 1));
-            title.text = (types.Count == 1 && variants.Count > 0 ? variants[0].Caliber : "Compatible ammo")
+            title.text = (types.Count == 1 && variants.Count > 0 ? variants[0].Caliber : "Ammo")
                 + "  (" + enabledCount + "/" + variants.Count + ")";
-            hint.text = "Choose which ammo variants to include.";
+            hint.text = "";
             for (int i = 0; i < rows.Count; ++i)
             {
                 int index = page * PageSize + i;

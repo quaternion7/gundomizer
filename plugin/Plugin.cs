@@ -36,19 +36,14 @@ namespace Gundomizer
                     if (removed) Config.Save();
                 }
                 SpawnItemInstantly = Config.Bind("General", "Spawn Item Instantly", true,
-                    "Enabled: spawns the item when you click the button. " +
-                    "Disabled: select the random item, use the panel's Spawn button to spawn it.");
+                    "ON: spawn on roll. OFF: preview; press Spawn to accept.");
                 AutoFillHeldItem = Config.Bind("General", "Auto Fill Held Item", true,
-                    "After spawning randomized ammo, replace existing rounds and fill the held magazine or weapon to capacity with that ammo. " +
-                    "Also fills matching clips, speedloaders, and installed weapon magazines/chambers of the held item. " +
-                    "In selection mode, filling happens only when you press Spawn.");
+                    "Fill the held item with rolled ammo, replacing loaded rounds. Also spawns the loose round. " +
+                    "In preview mode, fills when you press Spawn.");
                 PersistentIndex = Config.Bind("Performance", "Persistent Connector Index", true,
-                    "Read and cache prefab connector metadata slowly in the background, without loading Unity assets. " +
-                    "Only changed packages/bundles are rebuilt. Unindexed items keep the normal live checks. Restart the game after changing this setting.");
+                    "Cache compatibility metadata in the background. Update changed packages; use live checks for uncached items. Restart required.");
                 ResetMetadataIndexing = Config.Bind("Performance", "Reset Metadata Indexing", false,
-                    "Set true to discard Gundomizer's saved connector metadata and rebuild it in the background. " +
-                    "Runs once and switches itself back to false. Applies during play when changed through a config manager, " +
-                    "or on the next launch when edited with the game closed.");
+                    "Clear and rebuild the saved index. Switches itself off after running.");
                 SpawnerBridge.Validate();
                 OtherLoaderBridge.Initialize();
                 harmony = new Harmony("quaternion.gundomizer");

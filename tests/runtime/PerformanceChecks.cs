@@ -131,7 +131,7 @@ public static class PerformanceChecks
             var beforeCancel = new HashSet<int>(Object.FindObjectsOfType<FVRPhysicalObject>().Select(o => o.GetInstanceID()));
             button.onClick.Invoke();
             yield return null;
-            Check(!Get<bool>(controller, "busy") && Get<string>(controller, "status") == "Randomizer cancelled.", "clicking the active button cancels its roll", log);
+            Check(!Get<bool>(controller, "busy") && Get<string>(controller, "status") == "Cancelled.", "clicking the active button cancels its roll", log);
             var access = assembly.GetType("Gundomizer.AssetAccess");
             var different = entries.First(e => loading.GetValue(e.MainObject) == null).MainObject;
             object[] requestArgs = { different, null, false };
@@ -163,7 +163,7 @@ public static class PerformanceChecks
             yield return new WaitForSecondsRealtime(10.5f);
             Check(Get<bool>(controller, "busy"), "native Spawn keeps waiting past the former timeout", log);
             spawner.BTN_Details_Spawn(); yield return null;
-            Check(!Get<bool>(controller, "busy") && Get<string>(controller, "status") == "Randomizer cancelled.", "native Spawn can cancel its pending acceptance", log);
+            Check(!Get<bool>(controller, "busy") && Get<string>(controller, "status") == "Cancelled.", "native Spawn can cancel its pending acceptance", log);
             stalled.Request = new AnvilDummyOperation(fixtures[different]); stalled.Pump();
             yield return null;
             Check(Object.FindObjectsOfType<FVRPhysicalObject>().All(o => beforeCancel.Contains(o.GetInstanceID())), "cancelled native acceptance leaves no late object", log);

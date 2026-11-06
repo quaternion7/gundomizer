@@ -69,10 +69,10 @@ namespace Gundomizer
 
         private static bool RandomizeSlot(MonoBehaviour menu, bool wholeBuild, out string message)
         {
-            message = "No modular part menu available.";
+            message = "Slot unavailable.";
             try
             {
-                if (!wholeBuild && IsBusy(menu)) { message = "Build randomization is in progress."; return false; }
+                if (!wholeBuild && IsBusy(menu)) { message = "Build roll in progress."; return false; }
                 if (wholeBuild && (bool)Read(menu, "_isShowingSkins"))
                     AccessTools.Method(menu.GetType(), "PButton_HideSkins").Invoke(menu, null);
                 object definition;
@@ -84,7 +84,7 @@ namespace Gundomizer
                 {
                     var pool = (IList<string>)AccessTools.Property(definition.GetType(), "TakeAndHoldSpawnPool").GetValue(definition, null);
                     int choice = SelectionPolicy.AlternativeIndex(pool, CurrentPoint(menu), n => UnityEngine.Random.Range(0, n));
-                    if (choice < 0) { message = "No other parts available for this slot."; return false; }
+                    if (choice < 0) { message = "No other parts."; return false; }
                     selected = pool[choice];
                 }
 
@@ -94,7 +94,7 @@ namespace Gundomizer
                 var names = (string[])Read(menu, "_partNames");
                 int index = Array.IndexOf(names, selected);
                 int pageSize = ((GameObject[])Read(menu, "PartButtons")).Length;
-                if (index < 0 || pageSize == 0) { message = "Randomized part is unavailable in this menu."; return false; }
+                if (index < 0 || pageSize == 0) { message = "Part unavailable."; return false; }
                 AccessTools.Field(type, "_pageIndex").SetValue(menu, index / pageSize);
                 AccessTools.Method(type, "PButton_Select").Invoke(menu, new object[] { index % pageSize });
                 message = "Selected " + selected + ".";
@@ -104,36 +104,36 @@ namespace Gundomizer
             {
                 var cause = ex is TargetInvocationException && ex.InnerException != null ? ex.InnerException : ex;
                 Plugin.Log.LogWarning("Modular slot roll failed: " + cause);
-                message = "Could not complete the modular slot change. Check logs.";
+                message = "Part roll failed. See log.";
                 return false;
             }
         }
 
         private static bool TryDefinition(MonoBehaviour menu, out object definition, out string message, bool wholeBuild = false)
         {
-            definition = null; message = "No modular part menu available.";
+            definition = null; message = "Slot unavailable.";
             if (menu == null) return false;
             var type = menu.GetType();
             while (type != null && type.FullName != "ModularWorkshop.ModularWorkshopUI") type = type.BaseType;
             if (type == null) return false;
             if ((bool)Read(menu, "_skinOnlyMode") || (!wholeBuild && (bool)Read(menu, "_isShowingSkins")))
-            { message = "Choose a parts menu to randomize this slot."; return false; }
+            { message = "Open the parts menu."; return false; }
             object target = Read(menu, "ModularWeapon") ?? Read(menu, "ModularPhysicalObject");
             if (target == null || (target is UnityEngine.Object && (UnityEngine.Object)target == null)) return false;
             string group = (string)Read(menu, "ModularPartsGroupID");
             var points = (IDictionary)AccessTools.Property(target.GetType(), "AllAttachmentPoints").GetValue(target, null);
-            if (!points.Contains(group)) { message = "This modular slot is no longer available."; return false; }
+            if (!points.Contains(group)) { message = "Slot unavailable."; return false; }
             var point = points[group];
             if ((bool)Read(point, "IsPointDisabled") || (bool)Read(point, "DisallowTakeAndHoldRandomization"))
-            { message = "This modular slot is excluded from randomization."; return false; }
+            { message = "Slot excluded."; return false; }
             var manager = type.Assembly.GetType("ModularWorkshop.ModularWorkshopManager", true);
             var groups = (IDictionary)AccessTools.Field(manager, "ModularWorkshopPartsGroupsDictionary").GetValue(null);
-            if (!groups.Contains(group)) { message = "Modular parts are still unavailable."; return false; }
+            if (!groups.Contains(group)) { message = "Parts unavailable."; return false; }
             definition = groups[group];
             var pool = (IList)AccessTools.Property(definition.GetType(), "TakeAndHoldSpawnPool").GetValue(definition, null);
-            if (pool.Count == 0) { message = "No parts in this slot's randomization pool."; return false; }
+            if (pool.Count == 0) { message = "No eligible parts."; return false; }
             if (!wholeBuild && !pool.Cast<string>().Any(id => id != (string)Read(point, "SelectedModularWeaponPart")))
-            { message = "No other parts available for this slot."; return false; }
+            { message = "No other parts."; return false; }
             return true;
         }
 
@@ -187,10 +187,10 @@ namespace Gundomizer
 
         private static bool RandomizeSkin(MonoBehaviour menu, bool wholeBuild, out string message)
         {
-            message = "No other skins available.";
+            message = "No other skins.";
             try
             {
-                if (!wholeBuild && IsBusy(menu)) { message = "Build randomization is in progress."; return false; }
+                if (!wholeBuild && IsBusy(menu)) { message = "Build roll in progress."; return false; }
                 string[] names; string current;
                 if (!SkinChoices(menu, wholeBuild, out names, out current)) return false;
                 int choice = SelectionPolicy.AlternativeIndex(names, current, n => UnityEngine.Random.Range(0, n));
@@ -212,7 +212,7 @@ namespace Gundomizer
             catch (Exception ex)
             {
                 Plugin.Log.LogWarning("Modular skin roll failed: " + ex);
-                message = "Could not complete the skin change. Check logs.";
+                message = "Skin roll failed. See log.";
                 return false;
             }
         }

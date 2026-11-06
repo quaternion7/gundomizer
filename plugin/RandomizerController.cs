@@ -128,9 +128,9 @@ namespace Gundomizer
             string message = null;
             if (busy || Time.unscaledTime < statusUntil) message = status;
             else if (compatibleButton.Hovered)
-                message = "Random COMPATIBLE item of held item [" +
-                    (cachedHeldItem == null ? "none" : cachedHeldName) + "] (" + compatiblePanel.ScopeDescription + ")";
-            else if (randomButton.Hovered) message = "Random Item (" + bridge.ScopeDescription + ")";
+                message = cachedHeldItem == null ? "Hold an item."
+                    : "Compatible item · " + compatiblePanel.ScopeDescription + "\nHeld: " + cachedHeldName;
+            else if (randomButton.Hovered) message = "Random item · " + bridge.ScopeDescription;
             else message = compatiblePanel?.Tooltip ?? ammoPanel?.Tooltip;
             if (ammoPanel != null && ammoPanel.IsOpen && !busy) message = null;
             if (compatiblePanel != null && compatiblePanel.IsOpen && !busy) message = null;
@@ -158,7 +158,7 @@ namespace Gundomizer
             busy = true;
             activeButton = button;
             cancelRequested = false;
-            Progress(compatible ? "Finding a compatible item..." : "Choosing an item...");
+            Progress(compatible ? "Finding compatible items…" : "Rolling…");
             nextClick = Time.unscaledTime + 0.3f;
             // Run on this panel's component so scene destruction cancels pending work.
             // Capture the setting now so a pending roll cannot change from selection to spawning.
@@ -176,7 +176,7 @@ namespace Gundomizer
             busy = true;
             activeButton = ammoPanel.RollButton;
             cancelRequested = false;
-            Progress("Choosing compatible ammo...");
+            Progress("Rolling ammo…");
             nextClick = Time.unscaledTime + 0.3f;
             StartCoroutine(GuardedRoll(true, cachedHeldItem, hand, Plugin.SpawnItemInstantly.Value,
                 variants, AmmoSelection.Shared.Revision, Plugin.AutoFillHeldItem.Value));
@@ -199,7 +199,7 @@ namespace Gundomizer
                     if (cancelRequested)
                     {
                         metrics.Outcome = "cancelled";
-                        Message("Randomizer cancelled.");
+                        Message("Cancelled.");
                         break;
                     }
                     object current;
@@ -212,7 +212,7 @@ namespace Gundomizer
                     {
                         metrics.Outcome = "failed";
                         Plugin.Log.LogError("Randomizer request failed: " + ex);
-                        Message("Could not complete the roll. Check logs.");
+                        Message("Roll failed. See log.");
                         break;
                     }
                     yield return current;
@@ -275,7 +275,7 @@ namespace Gundomizer
                 while (request == null)
                 {
                     if (AssetAccess.TryRequest(source, out request, out started)) break;
-                    Progress("Waiting for item loading...");
+                    Progress("Waiting for load…");
                     yield return null;
                 }
                 metrics.BeginRequest();
@@ -289,7 +289,7 @@ namespace Gundomizer
                 metrics.EndRequest();
                 var prefab = request == null ? null : request.Result;
                 if (prefab == null || prefab.GetComponent<FVRPhysicalObject>() == null)
-                { Message("Could not load " + entry.DisplayName + ". Check logs."); yield break; }
+                { Message("Load failed: " + entry.DisplayName + ". See log."); yield break; }
                 ConnectorIndex.Observe(source, prefab);
                 prefabs.Add(prefab);
             }
@@ -297,7 +297,7 @@ namespace Gundomizer
             for (int i = 0; i < prefabs.Count; ++i)
             {
                 var point = i == 0 ? bridge.SpawnPoint(entry) : bridge.SmallSpawnPoint();
-                if (!targetPoint.HasValue && point == null) { Message("This spawner has no spawn pad for this item."); yield break; }
+                if (!targetPoint.HasValue && point == null) { Message("No spawn pad."); yield break; }
                 // The toolbox tablet accepts selected items at the stylus's ray hit, with
                 // native vertical offsets for bundled items, rather than advancing its pads.
                 var position = targetPoint.HasValue ? targetPoint.Value + (i == 0 ? Vector3.zero : Vector3.up * (i + 1)) : point.position;
@@ -309,8 +309,8 @@ namespace Gundomizer
                 {
                     metrics.Outcome = "initialization failed";
                     Plugin.Log.LogError("Could not initialize " + sources[i].ItemID + "; removed the failed instance. " + problem);
-                    Message(i == 0 ? "Could not initialize " + entry.DisplayName + ". Failed instance removed; Check logs."
-                        : "Main item spawned; a bundled item failed and was removed. Check logs.");
+                    Message(i == 0 ? "Spawn failed: " + entry.DisplayName + ". See log."
+                        : "Extra item failed. See log.");
                     yield break;
                 }
                 bridge.RecordSpawn(entry, i == 0, !targetPoint.HasValue);
@@ -333,7 +333,7 @@ namespace Gundomizer
             var candidates = ammo == null && (selection == null || !selection.AllItems) ? bridge.CaptureSection() : new List<ItemSpawnerID>();
             if (selection != null && selection.AllItems)
             {
-                Progress("Collecting compatible choices across all items...");
+                Progress("Searching all items…");
                 var catalog = bridge.CollectAll(candidates);
                 try
                 {
@@ -407,12 +407,12 @@ namespace Gundomizer
                     {
                         LogSkipped(entry, ex);
                         metrics.Outcome = "load failed";
-                        Message("Could not load " + entry.DisplayName + ". Check logs.");
+                        Message("Load failed: " + entry.DisplayName + ". See log.");
                         yield break;
                     }
                     if (request == null)
                     {
-                        Progress("Waiting for item loading...");
+                        Progress("Waiting for load…");
                         metrics.NotePending();
                         yield return null;
                     }
@@ -466,7 +466,7 @@ namespace Gundomizer
                     var point = bridge.SpawnPoint(entry);
                     if (point == null)
                     {
-                        Message("This spawner has no spawn pad for this item.");
+                        Message("No spawn pad.");
                         yield break;
                     }
                     var position = point.position;
@@ -478,7 +478,7 @@ namespace Gundomizer
                     {
                         metrics.Outcome = "initialization failed";
                         Plugin.Log.LogError("Could not initialize " + entry.ItemID + "; removed the failed instance. " + problem);
-                        Message("Could not initialize " + entry.DisplayName + ". Failed instance removed; Check logs.");
+                        Message("Spawn failed: " + entry.DisplayName + ". See log.");
                         yield break;
                     }
                     bridge.RecordSpawn(entry);
@@ -493,13 +493,11 @@ namespace Gundomizer
             metrics.Outcome = "no matches";
             if (ammo != null)
             {
-                Message("No spawnable enabled ammo variants for " + Compatibility.Name(held) + ".");
+                Message("No matching ammo.");
                 yield break;
             }
-            string scope = selection != null && selection.AllItems ? "among enabled types across all items"
-                : (bridge.IsTagMode ? "matching these tags" : "in this section") + (selection == null ? "" : " and enabled types");
-            Message(compatible ? "No compatible items " + scope + " for " + Compatibility.Name(held) + "."
-                : "No spawnable items " + scope + ".");
+            string scope = selection != null && selection.AllItems ? "All items" : bridge.ScopeDescription;
+            Message((compatible ? "No compatible items" : "No spawnable items") + " · " + scope);
         }
 
         private bool StillValid(SpawnerBridge.Context context, bool compatible, FVRPhysicalObject held, FVRViveHand hand,
@@ -507,23 +505,23 @@ namespace Gundomizer
         {
             if (!Visible || (context != null && !bridge.MatchesContext(context)))
             {
-                Message("Section or filters changed. Randomizer cancelled."); return false;
+                Message("Cancelled: section changed."); return false;
             }
             if (ammoRevision >= 0 && ammoRevision != AmmoSelection.Shared.Revision)
             {
-                Message("Ammo choices changed. Randomizer cancelled."); return false;
+                Message("Cancelled: ammo choices changed."); return false;
             }
             if (compatible && ammoRevision < 0 && compatibleRevision >= 0 && compatibleRevision != CompatibleSelection.Shared.Revision)
-            { Message("Compatible choices changed. Randomizer cancelled."); return false; }
+            { Message("Cancelled: choices changed."); return false; }
             // Loading uses the 1 Hz cache; click and commit are the only on-demand hand reads.
             if (compatible && checkLiveHand) RefreshHeldItem(hand);
             if (compatible && !playerNearby)
             {
-                Message("Moved away from this spawner. Randomizer cancelled."); return false;
+                Message("Cancelled: out of range."); return false;
             }
             if (compatible && (held == null || cachedHeldItem != held))
             {
-                Message("Held item changed. Randomizer cancelled."); return false;
+                Message("Cancelled: held item changed."); return false;
             }
             return true;
         }
@@ -548,7 +546,7 @@ namespace Gundomizer
             RefreshHeldItem(hand);
             if (!playerNearby || cachedHeldItem != target) return "";
             var fill = AmmoFill.Apply(target, round);
-            if (fill.Failed > 0) return ". Fill error (details in log).";
+            if (fill.Failed > 0) return ". Fill failed. See log.";
             return fill.Filled > 0 ? ". Filled " + Compatibility.Name(target) + "." : "";
         }
 

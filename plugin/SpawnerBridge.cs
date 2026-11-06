@@ -32,7 +32,7 @@ namespace Gundomizer
         internal ItemSpawnerV2.PageMode PageMode => (ItemSpawnerV2.PageMode)Page.GetValue(spawner);
         private ItemSpawnerV2.SearchMode SearchMode => (ItemSpawnerV2.SearchMode)Search.GetValue(spawner);
         internal bool IsTagMode => SearchMode == ItemSpawnerV2.SearchMode.Tag;
-        internal string ScopeDescription => IsTagMode ? "matching current tags" : "of current section";
+        internal string ScopeDescription => IsTagMode ? "Current tags" : "This section";
         internal bool IsBrowsingSection
         {
             get
