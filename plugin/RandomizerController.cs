@@ -14,6 +14,7 @@ namespace Gundomizer
         private SpawnerBridge bridge;
         private RandomizerButton randomButton;
         private RandomizerButton compatibleButton;
+        private RandomizerButton allCompatibleButton;
         private RectTransform uiRoot;
         private AmmoPanel ammoPanel;
         private CompatiblePanel compatiblePanel;
@@ -109,7 +110,7 @@ namespace Gundomizer
 
         private void Update()
         {
-            if (randomButton == null || compatibleButton == null || uiRoot == null || spawner == null) return;
+            if (randomButton == null || compatibleButton == null || allCompatibleButton == null || uiRoot == null || spawner == null) return;
             bool visible = Visible;
             if (uiRoot.gameObject.activeSelf != visible) uiRoot.gameObject.SetActive(visible);
             if (!visible)
@@ -129,7 +130,9 @@ namespace Gundomizer
             if (busy || Time.unscaledTime < statusUntil) message = status;
             else if (compatibleButton.Hovered)
                 message = cachedHeldItem == null ? "Hold an item."
-                    : "Compatible item · " + compatiblePanel.ScopeDescription + "\nHeld: " + cachedHeldName;
+                    : "Compatible · " + bridge.ScopeDescription + "\nHeld: " + cachedHeldName;
+            else if (allCompatibleButton.Hovered)
+                message = cachedHeldItem == null ? "Hold an item." : "Compatible · All items\nHeld: " + cachedHeldName;
             else if (randomButton.Hovered) message = "Random item · " + bridge.ScopeDescription;
             else message = compatiblePanel?.Tooltip ?? ammoPanel?.Tooltip;
             if (ammoPanel != null && ammoPanel.IsOpen && !busy) message = null;
@@ -145,15 +148,25 @@ namespace Gundomizer
         }
 
         internal void Click(bool compatible, FVRViveHand pointingHand)
+            => ClickItem(compatible ? compatibleButton : randomButton, compatible ? new CompatibleSelection() : null, pointingHand);
+
+        internal void ClickAllItems(FVRViveHand pointingHand)
         {
-            var button = compatible ? compatibleButton : randomButton;
+            var selection = CompatibleSelection.Shared.Snapshot();
+            selection.SetScope(true);
+            ClickItem(allCompatibleButton, selection, pointingHand);
+        }
+
+        private void ClickItem(RandomizerButton button, CompatibleSelection selection, FVRViveHand pointingHand)
+        {
+            bool compatible = selection != null;
             if (CanCancel(button)) { CancelRoll(); return; }
             // A fresh click can accept a newly picked-up object before the next background poll.
             if (!CanClick(false)) return;
             if (compatible) RefreshHeldItem(pointingHand);
             var held = compatible ? cachedHeldItem : null;
             if (compatible && held == null) return;
-            if (compatible && !compatiblePanel.HasChoices) return;
+            if (button == allCompatibleButton && !compatiblePanel.HasChoices) return;
             if (compatible) compatiblePanel.Hide();
             busy = true;
             activeButton = button;
@@ -162,7 +175,7 @@ namespace Gundomizer
             nextClick = Time.unscaledTime + 0.3f;
             // Run on this panel's component so scene destruction cancels pending work.
             // Capture the setting now so a pending roll cannot change from selection to spawning.
-            StartCoroutine(GuardedRoll(compatible, held, pointingHand, Plugin.SpawnItemInstantly.Value));
+            StartCoroutine(GuardedRoll(compatible, held, pointingHand, Plugin.SpawnItemInstantly.Value, selection: selection));
         }
 
         internal void ClickAmmo(FVRViveHand hand)
@@ -183,11 +196,11 @@ namespace Gundomizer
         }
 
         private IEnumerator GuardedRoll(bool compatible, FVRPhysicalObject held, FVRViveHand hand, bool spawnInstantly,
-            List<AmmoCatalog.Variant> ammo = null, int ammoRevision = -1, bool autoFill = false)
+            List<AmmoCatalog.Variant> ammo = null, int ammoRevision = -1, bool autoFill = false, CompatibleSelection selection = null)
         {
             var metrics = new RollMetrics { Kind = ammo != null ? "Ammo" : compatible ? "Compatible" : "Random" };
-            compatibleRevision = compatible && ammo == null ? CompatibleSelection.Shared.Revision : -1;
-            return Guarded(Roll(compatible, held, hand, spawnInstantly, metrics, ammo, ammoRevision, autoFill), metrics);
+            compatibleRevision = selection != null && selection.AllItems ? CompatibleSelection.Shared.Revision : -1;
+            return Guarded(Roll(compatible, held, hand, spawnInstantly, metrics, ammo, ammoRevision, autoFill, selection), metrics);
         }
 
         private IEnumerator Guarded(IEnumerator roll, RollMetrics metrics)
@@ -322,9 +335,8 @@ namespace Gundomizer
         }
 
         private IEnumerator Roll(bool compatible, FVRPhysicalObject held, FVRViveHand hand, bool spawnInstantly,
-            RollMetrics metrics, List<AmmoCatalog.Variant> ammo, int ammoRevision, bool autoFill)
+            RollMetrics metrics, List<AmmoCatalog.Variant> ammo, int ammoRevision, bool autoFill, CompatibleSelection selection)
         {
-            var selection = compatible && ammo == null ? CompatibleSelection.Shared.Snapshot() : null;
             var context = ammo == null && (selection == null || !selection.AllItems) ? bridge.CaptureContext() : null;
             var variants = new Dictionary<string, AmmoCatalog.Variant>(StringComparer.Ordinal);
             if (ammo != null) foreach (var variant in ammo)
@@ -576,9 +588,15 @@ namespace Gundomizer
             float right = prevBounds.min.x - 35f;
             float gap = 20f;
             float height = source.rect.height * Mathf.Abs(source.localScale.y);
-            float diceWidth = height;
-            float compatibleWidth = height * 1.75f;
-            if (diceWidth + compatibleWidth + gap > right - left)
+            var nativeTagPrev = RectTransformUtility.CalculateRelativeRectTransformBounds(parent, spawner.BTN_TagPagePrev.transform);
+            var nativeTagNext = RectTransformUtility.CalculateRelativeRectTransformBounds(parent, spawner.BTN_TagPageNext.transform);
+            var nativeListPrev = RectTransformUtility.CalculateRelativeRectTransformBounds(parent, spawner.BTN_ListPagePrev.transform);
+            float rowBudget = nativeListPrev.min.x - 20f - (nativeTagNext.max.x - nativeTagPrev.min.x) - 30f - left;
+            // Fit the four actions while retaining the native tag/list pager hit targets.
+            float diceWidth = Mathf.Floor(Mathf.Min(height, (rowBudget - AmmoPanel.GroupWidth - CompatiblePanel.ToggleWidth - gap * 2 - 16f) / 3));
+            if (diceWidth < height * .7f) throw new InvalidOperationException("Insufficient space for the randomizer controls.");
+            float compatibleWidth = diceWidth + CompatiblePanel.ToggleWidth;
+            if (diceWidth * 2 + compatibleWidth + gap * 2 > right - left)
                 throw new InvalidOperationException("Insufficient free space beside native paging controls.");
             float y = source.localPosition.y;
             // A sibling of the native mode panels stays visible in both modes. Copy the classic
@@ -594,10 +612,14 @@ namespace Gundomizer
             parent = uiRoot;
             rainbowTexture = MakeRainbowTexture();
             randomButton = CloneButton(template, parent, "Randomizer", false, left + diceWidth * 0.5f, y, diceWidth);
-            compatibleButton = CloneButton(template, parent, "Compatible", true,
-                left + diceWidth + gap + (compatibleWidth - CompatiblePanel.ToggleWidth) * 0.5f, y, compatibleWidth - CompatiblePanel.ToggleWidth);
-            float compatibleRight = left + diceWidth + gap + compatibleWidth - CompatiblePanel.ToggleWidth;
-            compatiblePanel = new CompatiblePanel(this, parent, template, compatibleButton, compatibleRight, y);
+            compatibleButton = CloneButton(template, parent, "Compatible section", true, left + diceWidth + gap + diceWidth * .5f, y, diceWidth);
+            float allLeft = left + diceWidth * 2 + gap * 2;
+            allCompatibleButton = CloneButton(template, parent, "Compatible all items", true,
+                allLeft + (compatibleWidth - CompatiblePanel.ToggleWidth) * .5f, y, compatibleWidth - CompatiblePanel.ToggleWidth);
+            allCompatibleButton.Handler = ClickAllItems;
+            allCompatibleButton.Icon.AllItems = true; allCompatibleButton.Icon.SetVerticesDirty();
+            float compatibleRight = allLeft + compatibleWidth - CompatiblePanel.ToggleWidth;
+            compatiblePanel = new CompatiblePanel(this, parent, template, allCompatibleButton, compatibleRight, y);
             float ammoLeft = compatibleRight + CompatiblePanel.ToggleWidth + 16f;
             ammoPanel = new AmmoPanel(this, spawner, parent, template, ammoLeft, y);
             // Make room beside the native tag pager without shrinking its text or hit targets.

@@ -52,11 +52,26 @@ public static class CompatiblePanelChecks
             GM.CurrentPlayerBody.Head.position = spawner.transform.position + Vector3.back;
             spawner.BTN_SetPageMode(2); spawner.BTN_SimpleMode_SwitchToTagSearch(); spawner.BTN_Tag_ClearSelectedTags();
             yield return new WaitForSecondsRealtime(.4f); Call(controller, "RefreshHeldItem", hands[0]);
-            Check(!(bool)Prop(choices, "AllItems"), "compatible scope defaults to current section/tags", log);
+            Check((bool)Prop(choices, "AllItems"), "configurable compatible choices default to all items", log);
+            var sectionButton = Get<MonoBehaviour>(controller, "compatibleButton");
+            var allButton = Get<MonoBehaviour>(controller, "allCompatibleButton");
+            Check(sectionButton != allButton && !Get<bool>(Get<object>(sectionButton, "Icon"), "AllItems") && Get<bool>(Get<object>(allButton, "Icon"), "AllItems"),
+                "section and all-items rolls have distinct grid and globe icons", log);
+            yield return new WaitForEndOfFrame(); CaptureFooter(root, Path.Combine(directory, "spawner-footer.png"));
+            var rowButtons = root.GetComponentsInChildren<MonoBehaviour>(true).Where(b => b.GetType().FullName == "Gundomizer.RandomizerButton" && b.transform.parent == root).ToArray();
+            for (int i = 0; i < rowButtons.Length; ++i) for (int j = i + 1; j < rowButtons.Length; ++j)
+            {
+                var a = RectTransformUtility.CalculateRelativeRectTransformBounds(root, rowButtons[i].transform);
+                var b = RectTransformUtility.CalculateRelativeRectTransformBounds(root, rowButtons[j].transform);
+                float overlapX = Mathf.Min(a.max.x, b.max.x) - Mathf.Max(a.min.x, b.min.x);
+                float overlapY = Mathf.Min(a.max.y, b.max.y) - Mathf.Max(a.min.y, b.min.y);
+                Check(overlapX < .25f || overlapY < .25f, "spawner button areas remain separate: " + rowButtons[i].name + " / " + rowButtons[j].name, log);
+            }
             Call(Get<object>(panel, "toggle"), "Activate", hands[0]);
             Check((bool)Prop(panel, "IsOpen"), "actual dropdown opens the compatible popup", log);
-            Call(Get<object>(panel, "all"), "Activate", hands[0]);
-            Check((bool)Prop(choices, "AllItems"), "actual scope button selects all items", log);
+            var popupButtons = Get<RectTransform>(panel, "popup").GetComponentsInChildren<MonoBehaviour>(true)
+                .Where(b => b.GetType().FullName == "Gundomizer.RandomizerButton").Select(b => Get<Text>(b, "Caption")).Where(t => t != null);
+            Check(!popupButtons.Any(t => t.text.Contains("Current section") || t.text.Contains("Current tags") || t.text.Contains("All items")), "filter popup has no scope-switch controls", log);
             foreach (object kind in Enum.GetValues(kindType)) Call(choices, "Set", kind, null, kind.Equals(magazineKind));
             Call(panel, "Redraw"); yield return null;
             var loading = AccessTools.Field(typeof(AnvilAsset), "m_loadingState");
@@ -85,7 +100,7 @@ public static class CompatiblePanelChecks
             {
                 instant.Value = spawn; yield return new WaitForSecondsRealtime(.4f);
                 var before = new HashSet<int>(Object.FindObjectsOfType<FVRFireArmMagazine>().Select(m => m.GetInstanceID()));
-                Call(Get<object>(controller, "compatibleButton"), "Activate", hands[0]);
+                Call(allButton, "Activate", hands[0]);
                 deadline = Time.realtimeSinceStartup + 180;
                 while (Get<bool>(controller, "busy") && Time.realtimeSinceStartup < deadline) yield return null;
                 Check(!Get<bool>(controller, "busy"), "compatible roll completed", log);
@@ -109,7 +124,7 @@ public static class CompatiblePanelChecks
             instant.Value = false; yield return new WaitForSecondsRealtime(.4f); Call(portableController, "RefreshHeldItem", hands[0]);
             Check((bool)Prop(Get<object>(portableController, "compatiblePanel"), "HasChoices"), "tablet shares current compatible choices", log);
             var beforeTablet = new HashSet<int>(Object.FindObjectsOfType<FVRFireArmMagazine>().Select(m => m.GetInstanceID()));
-            Call(Get<object>(portableController, "compatibleButton"), "Activate", hands[0]);
+            Call(Get<object>(portableController, "allCompatibleButton"), "Activate", hands[0]);
             deadline = Time.realtimeSinceStartup + 180;
             while (Get<bool>(portableController, "busy") && Time.realtimeSinceStartup < deadline) yield return null;
             Check(Get<string>(portableController, "status").StartsWith("Selected "), "tablet previews a compatible magazine from all categories", log);
@@ -128,6 +143,17 @@ public static class CompatiblePanelChecks
             var candidate = IM.OD["Magazine_DanielDefense_32"].GetGameObjectAsync();
             while (!candidate.IsCompleted) yield return null;
             Check(!(bool)Call(excludedQuery, "Matches", candidate.Result), "live compatibility honors a connector exclusion", log);
+            instant.Value = false;
+            yield return new WaitForSecondsRealtime(.4f); yield return new WaitForEndOfFrame();
+            Check(sectionButton.GetComponent<Button>().interactable && !allButton.GetComponent<Button>().interactable,
+                "global exclusions disable only the all-items roll", log);
+            Call(sectionButton, "Activate", hands[0]);
+            deadline = Time.realtimeSinceStartup + 120;
+            while (Get<bool>(controller, "busy") && Time.realtimeSinceStartup < deadline) yield return null;
+            Check(Get<string>(controller, "status").StartsWith("Selected "), "section roll still works when global choices exclude its magazines", log);
+            var selected = (ItemSpawnerID)AccessTools.Method(assembly.GetType("Gundomizer.OtherLoaderBridge"), "Resolve").Invoke(null, new object[] { Get<string>(spawner, "m_selectedID") });
+            var sectionPool = (List<ItemSpawnerID>)Call(bridge, "CaptureSection");
+            Check(selected != null && sectionPool.Any(e => e.MainObject.ItemID == selected.MainObject.ItemID), "section roll stays inside the native category/tag pool", log);
             Call(choices, "Set", magazineKind, (int?)connector, true);
             Call(choices, "Set", magazineKind, null, false); Call(choices, "Set", attachmentKind, null, true); Call(panel, "Redraw");
             var unfiltered = AccessTools.Method(compatibility, "Capture").Invoke(null, new object[] { physical });
@@ -140,7 +166,7 @@ public static class CompatiblePanelChecks
             Check(!(bool)Call(disabledMountQuery, "CouldMatch", unknownAttachment, false), "disabled mount families reject even unindexed attachments without loading", log);
             Call(choices, "Set", attachmentKind, (int?)mounts[0], true); Call(panel, "Redraw");
             Check((bool)Prop(panel, "HasChoices"), "re-enabling one attachment connector restores rolling", log);
-            spawner.BTN_SetPageMode(3); spawner.BTN_SimpleMode_SwitchToSimpleMode(); Call(choices, "SetScope", false); Call(panel, "Redraw");
+            spawner.BTN_SetPageMode(3); spawner.BTN_SimpleMode_SwitchToSimpleMode(); Call(panel, "Redraw");
             yield return null;
             Check(root.gameObject.activeInHierarchy, "compatible group remains visible in classic mode", log);
             Call(Get<object>(panel, "toggle"), "Activate", hands[0]);
@@ -154,9 +180,10 @@ public static class CompatiblePanelChecks
             Check((bool)Prop(panel, "IsOpen") && !(bool)Prop(ammo, "IsOpen"), "opening compatible choices closes the ammo popup", log);
             int currentRevision = (int)Prop(choices, "Revision");
             AccessTools.Field(controller.GetType(), "compatibleRevision").SetValue(controller, currentRevision);
-            Call(choices, "SetScope", true);
+            Call(choices, "Set", attachmentKind, (int?)mounts[0], false);
             Check(!(bool)Call(controller, "StillValid", null, true, physical, hands[0], false, -1), "changed choices invalidate a pending compatible roll", log);
             AccessTools.Field(controller.GetType(), "compatibleRevision").SetValue(controller, -1);
+            Check((bool)Call(controller, "StillValid", Call(bridge, "CaptureContext"), true, physical, hands[0], false, -1), "global choice changes do not invalidate a section roll", log);
             heldField.SetValue(hands[1], null); Call(controller, "RefreshHeldItem", hands[0]);
             Check(!(bool)Prop(panel, "IsOpen") && !(bool)Prop(panel, "HasChoices"), "empty hands close the panel and disable compatible rolling", log);
             log("COMPATIBLE PANEL checks finished");
@@ -171,6 +198,38 @@ public static class CompatiblePanelChecks
             GM.CurrentPlayerBody.Head.position = priorHead;
             if (held != null) Object.Destroy(held);
             if (tablet != null) Object.Destroy(tablet);
+        }
+    }
+
+    private static void CaptureFooter(RectTransform root, string path)
+    {
+        var canvas = root.GetComponentInParent<Canvas>(); var panel = (RectTransform)canvas.transform;
+        var bounds = new Bounds(panel.InverseTransformPoint(root.position), Vector3.zero); bool first = true;
+        foreach (var button in root.GetComponentsInChildren<MonoBehaviour>())
+        {
+            if (button.GetType().FullName != "Gundomizer.RandomizerButton" || button.transform.parent != root) continue;
+            var b = RectTransformUtility.CalculateRelativeRectTransformBounds(panel, button.transform);
+            if (first) { bounds = b; first = false; } else bounds.Encapsulate(b);
+        }
+        var obj = new GameObject("Spawner footer capture"); var camera = obj.AddComponent<Camera>();
+        var target = new RenderTexture(1200, 300, 24); var pixels = new Texture2D(1200, 300, TextureFormat.RGB24, false);
+        var previous = RenderTexture.active;
+        var layers = canvas.GetComponentsInChildren<Transform>(true).ToDictionary(t => t.gameObject, t => t.gameObject.layer);
+        try
+        {
+            foreach (var go in layers.Keys) go.layer = 31;
+            camera.transform.rotation = panel.rotation; camera.transform.position = panel.TransformPoint(bounds.center) - panel.forward * 2;
+            camera.orthographic = true; camera.orthographicSize = Mathf.Max(bounds.size.y * Mathf.Abs(panel.lossyScale.y), bounds.size.x * Mathf.Abs(panel.lossyScale.x) / 4) * .6f;
+            camera.nearClipPlane = .01f; camera.farClipPlane = 4; camera.cullingMask = 1 << 31;
+            camera.clearFlags = CameraClearFlags.SolidColor; camera.backgroundColor = new Color(.04f, .04f, .04f);
+            camera.targetTexture = target; camera.Render(); RenderTexture.active = target;
+            pixels.ReadPixels(new Rect(0, 0, 1200, 300), 0, 0); pixels.Apply(); File.WriteAllBytes(path, pixels.EncodeToPNG());
+        }
+        finally
+        {
+            foreach (var entry in layers) if (entry.Key != null) entry.Key.layer = entry.Value;
+            RenderTexture.active = previous; camera.targetTexture = null;
+            Object.Destroy(obj); Object.Destroy(target); Object.Destroy(pixels);
         }
     }
 }

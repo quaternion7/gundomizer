@@ -7,7 +7,7 @@ namespace Gundomizer
     // encountered connectors as enabled; changing guns never silently resets user choices.
     internal sealed class CompatibleSelection
     {
-        internal static readonly CompatibleSelection Shared = new CompatibleSelection();
+        internal static readonly CompatibleSelection Shared = new CompatibleSelection { AllItems = true };
         private readonly HashSet<string> excluded = new HashSet<string>(StringComparer.Ordinal);
         internal bool AllItems { get; private set; }
         internal int Revision { get; private set; }

@@ -10,25 +10,23 @@ namespace Gundomizer
     internal sealed class CompatiblePanel
     {
         internal const float ToggleWidth = 60f;
-        private const float Width = 1200f, Height = 1050f;
+        private const float Width = 1200f, Height = 900f;
         private const int PageSize = 4;
         private readonly RandomizerController owner;
         private readonly GameObject template;
         private readonly RectTransform popup;
-        private readonly RandomizerButton toggle, section, all, previous, next;
+        private readonly RandomizerButton toggle, previous, next;
         private readonly List<RandomizerButton> kinds = new List<RandomizerButton>(), rows = new List<RandomizerButton>();
-        private readonly Text heldLabel, hint, connectorLabel, summary, pageLabel;
+        private readonly Text heldLabel, connectorLabel, summary, pageLabel;
         private readonly List<KeyValuePair<CompatibilityKind, int>> connectors = new List<KeyValuePair<CompatibilityKind, int>>();
         private readonly Dictionary<Transform, Vector3> topPositions = new Dictionary<Transform, Vector3>();
         private List<CompatibilityKind> available = new List<CompatibilityKind>();
         private Compatibility.Query query;
         private FVRPhysicalObject held;
         private string signature;
-        private string displayedScope;
         private int page, revision = -1;
         internal bool IsOpen => popup.gameObject.activeSelf;
         internal bool HasChoices { get; private set; }
-        internal string ScopeDescription => CompatibleSelection.Shared.AllItems ? "All items" : owner.ScopeDescription;
         internal string Tooltip => toggle.Hovered ? "Compatible filters" : null;
 
         internal CompatiblePanel(RandomizerController owner, RectTransform root, GameObject template,
@@ -60,19 +58,16 @@ namespace Gundomizer
             var blocker = popup.GetComponent<BoxCollider>(); blocker.center = new Vector3(Width / 2, Height / 2, 2);
             blocker.size = new Vector3(Width, Height, 1);
             popup.GetComponent<FVRPointable>().MaxPointingRange = roll.MaxPointingRange;
-            Label("Title", "Compatible filters", 32, 990, 1000, 70, 46);
-            Button("Close", "X", 1125, 990, 90, hand => Hide());
-            heldLabel = Label("Held", "", 32, 930, 1136, 60, 34);
-            section = Button("Section", "Current section", 305, 850, 545, hand => SetScope(false));
-            all = Button("All items", "All items", 895, 850, 545, hand => SetScope(true));
-            hint = Label("Scope hint", "", 32, 790, 1136, 65, 30);
+            Label("Title", "Compatible filters · All items", 32, 840, 1000, 70, 46);
+            Button("Close", "X", 1125, 840, 90, hand => Hide());
+            heldLabel = Label("Held", "", 32, 780, 1136, 60, 34);
             Label("Include", "Include", 32, 735, 1136, 50, 34);
             for (int i = 0; i < 5; ++i)
             {
                 int slot = i;
                 kinds.Add(Button("Kind " + i, "", 305 + (i % 2) * 590, 675 - (i / 2) * 78, 545, hand => ToggleKind(slot)));
             }
-            connectorLabel = Label("Connectors", "Connector choices", 32, 430, 1136, 50, 34);
+            connectorLabel = Label("Connectors", "Connectors", 32, 430, 1136, 50, 34);
             for (int i = 0; i < PageSize; ++i)
             {
                 int slot = i;
@@ -101,13 +96,11 @@ namespace Gundomizer
         }
         internal void Update()
         {
-            if (revision != CompatibleSelection.Shared.Revision || displayedScope != ScopeDescription) Redraw();
-            section.Caption.text = (CompatibleSelection.Shared.AllItems ? "[ ] " : "[x] ") + (owner.IsTagMode ? "Current tags" : "Current section");
+            if (revision != CompatibleSelection.Shared.Revision) Redraw();
         }
         internal void Hide() { SetOpen(false); }
         private void SetOpen(bool open)
         { popup.gameObject.SetActive(open); toggle.Icon.rectTransform.localRotation = Quaternion.Euler(0, 0, open ? 180 : 0); }
-        private void SetScope(bool value) { CompatibleSelection.Shared.SetScope(value); Redraw(); }
         private void ToggleKind(int slot)
         {
             if (slot >= available.Count) return;
@@ -135,10 +128,7 @@ namespace Gundomizer
         private void Redraw()
         {
             var choices = CompatibleSelection.Shared; revision = choices.Revision;
-            displayedScope = ScopeDescription;
             heldLabel.text = "Held: " + Compatibility.Name(held);
-            hint.text = "";
-            all.Caption.text = (choices.AllItems ? "[x] " : "[ ] ") + "All items";
             connectors.Clear(); HasChoices = false;
             for (int i = 0; i < kinds.Count; ++i)
             {

@@ -6,6 +6,7 @@ namespace Gundomizer
     public sealed class ButtonIcon : MaskableGraphic
     {
         internal bool Compatible;
+        internal bool AllItems;
         internal bool Ammo;
         internal bool Dropdown;
 
@@ -16,7 +17,16 @@ namespace Gundomizer
             const float viewWidth = 100f;
             float scale = Mathf.Min(rect.width / viewWidth, rect.height / 100f);
             var origin = new Vector2(rect.center.x - viewWidth * scale * 0.5f, rect.center.y + 50f * scale);
-            var shapes = Ammo ? IconGeometry.Cartridge : Dropdown ? IconGeometry.Chevron : Compatible ? IconGeometry.Link : IconGeometry.Dice;
+            if (Compatible && !Ammo && !Dropdown)
+            {
+                Draw(mesh, AllItems ? IconGeometry.Globe : IconGeometry.Grid, origin + new Vector2(16 * scale, 0), scale * .68f);
+                Draw(mesh, IconGeometry.Link, origin + new Vector2(29 * scale, -58 * scale), scale * .42f);
+            }
+            else Draw(mesh, Ammo ? IconGeometry.Cartridge : Dropdown ? IconGeometry.Chevron : IconGeometry.Dice, origin, scale);
+        }
+
+        private void Draw(VertexHelper mesh, IconShape[] shapes, Vector2 origin, float scale)
+        {
             foreach (var shape in shapes)
             {
                 int start = mesh.currentVertCount;

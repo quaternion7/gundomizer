@@ -25,6 +25,10 @@ static class Program
         Check(SelectionPolicy.AlternativeIndex(new string[0], "missing", n => 0) == -1, "empty alternative pools are safe");
         Check(SelectionPolicy.AlternativeIndex(new[] { "allowed" }, "excluded", n => 0) == 0, "a current choice outside the authored pool leaves eligible alternatives intact");
         var compatible = new CompatibleSelection();
+        Check(CompatibleSelection.Shared.AllItems, "configurable shared choices target all items");
+        CompatibleSelection.Shared.Set(CompatibilityKind.Magazine, 7, false);
+        Check(compatible.Includes(CompatibilityKind.Magazine, 7) && !CompatibleSelection.Shared.Includes(CompatibilityKind.Magazine, 7), "section choices stay independent from configurable global exclusions");
+        CompatibleSelection.Shared.Set(CompatibilityKind.Magazine, 7, true);
         Check(!compatible.AllItems && compatible.Includes(CompatibilityKind.Magazine, 7), "compatible choices default to current scope with all connectors enabled");
         compatible.Set(CompatibilityKind.Magazine, 7, false);
         Check(!compatible.Includes(CompatibilityKind.Magazine, 7) && compatible.Includes(CompatibilityKind.Magazine, 9)
@@ -42,7 +46,8 @@ static class Program
         {
             var shapes = new Dictionary<string, object>();
             foreach (var pair in new[] { new KeyValuePair<string,IconShape[]>("dice",IconGeometry.Dice),
-                new KeyValuePair<string,IconShape[]>("compatible",IconGeometry.Link) })
+                new KeyValuePair<string,IconShape[]>("compatible",IconGeometry.Link),
+                new KeyValuePair<string,IconShape[]>("grid",IconGeometry.Grid), new KeyValuePair<string,IconShape[]>("globe",IconGeometry.Globe) })
             {
                 var list = new List<object>();
                 foreach (var shape in pair.Value) list.Add(new { points = shape.Points, cutout = shape.Cutout });

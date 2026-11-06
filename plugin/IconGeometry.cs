@@ -16,6 +16,8 @@ namespace Gundomizer
     {
         internal static readonly IconShape[] Dice = MakeDice();
         internal static readonly IconShape[] Link = MakeLink();
+        internal static readonly IconShape[] Grid = MakeGrid();
+        internal static readonly IconShape[] Globe = MakeGlobe();
         internal static readonly IconShape[] Cartridge = {
             new IconShape(false, 34,35, 34,23, 50,5, 66,23, 66,35),
             new IconShape(false, 32,39, 68,39, 68,85, 32,85),
@@ -32,6 +34,38 @@ namespace Gundomizer
             foreach (var point in new[] { new[] { 32f, 32f }, new[] { 68f, 32f }, new[] { 50f, 50f },
                 new[] { 32f, 68f }, new[] { 68f, 68f } })
                 shapes.Add(Circle(point[0], point[1], 7f, true));
+            return shapes.ToArray();
+        }
+
+        private static IconShape[] MakeGrid()
+        {
+            var shapes = new List<IconShape>();
+            foreach (float x in new[] { 12f, 56f }) foreach (float y in new[] { 12f, 56f })
+            {
+                shapes.Add(RoundedRect(x, y, 32, 32, 4));
+                shapes.Add(RoundedRect(x + 5, y + 5, 22, 22, 1.5f, true));
+            }
+            return shapes.ToArray();
+        }
+
+        private static IconShape[] MakeGlobe()
+        {
+            var shapes = new List<IconShape>();
+            foreach (float radiusX in new[] { 38f, 18f })
+                for (int i = 0; i < 48; ++i)
+                {
+                    double a = i * Math.PI / 24, b = (i + 1) * Math.PI / 24;
+                    shapes.Add(new IconShape(false,
+                        50 + radiusX * (float)Math.Cos(a), 50 + 38 * (float)Math.Sin(a),
+                        50 + radiusX * (float)Math.Cos(b), 50 + 38 * (float)Math.Sin(b),
+                        50 + (radiusX - 4) * (float)Math.Cos(b), 50 + 34 * (float)Math.Sin(b),
+                        50 + (radiusX - 4) * (float)Math.Cos(a), 50 + 34 * (float)Math.Sin(a)));
+                }
+            foreach (float y in new[] { 33f, 50f, 67f })
+            {
+                float half = (float)Math.Sqrt(38 * 38 - (y - 50) * (y - 50)) - 2;
+                shapes.Add(new IconShape(false, 50 - half, y - 2, 50 + half, y - 2, 50 + half, y + 2, 50 - half, y + 2));
+            }
             return shapes.ToArray();
         }
 
