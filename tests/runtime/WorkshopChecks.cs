@@ -53,11 +53,8 @@ public static class WorkshopChecks
                 created.Add(instance);
                 foreach (var rb in instance.GetComponentsInChildren<Rigidbody>()) rb.isKinematic = true;
                 platform = (MonoBehaviour)instance.GetComponentInChildren(mw.GetType("ModularWorkshop.ModularWorkshopPlatform"), true);
-                if (File.Exists(Path.Combine(directory, "workshop-placement-mode.txt")))
-                {
-                    yield return null;
-                    PlaceOnTable(spawner, instance, log);
-                }
+                yield return null;
+                PlaceOnTable(spawner, instance, log);
                 break;
             }
             Check(platform != null, "real workshop platform spawned", log);
@@ -183,6 +180,30 @@ public static class WorkshopChecks
                     Call(menu, "PButton_HideUI");
                     break;
                 }
+                if (source.ItemID == "PMM9mm")
+                {
+                    var parentMenu = menus.First(m => !(bool)Read(m, "_skinOnlyMode") && Read(m, "PartType").ToString() == "Barrel");
+                    var parentTarget = Read(parentMenu, "ModularWeapon");
+                    int preservedChildren = 0;
+                    Call(parentMenu, "PButton_ShowUI");
+                    for (int attempt = 0; attempt < 6; ++attempt)
+                    {
+                        var childrenBefore = ((IList)Property(parentTarget, "SubAttachmentPoints")).Cast<object>()
+                            .ToDictionary(p => (string)Read(p, "ModularPartsGroupID"), p => (string)Read(p, "SelectedModularWeaponPart"));
+                        object[] args = { parentMenu, null };
+                        Check((bool)AccessTools.Method(controller.GetType().Assembly.GetType("Gundomizer.ModularWorkshopBridge"), "TryRandomizeSlot").Invoke(null, args), "parent slot reroll succeeds", log);
+                        yield return null;
+                        foreach (var child in ((IList)Property(parentTarget, "SubAttachmentPoints")))
+                        {
+                            string prior;
+                            if (!childrenBefore.TryGetValue((string)Read(child, "ModularPartsGroupID"), out prior)) continue;
+                            Check((string)Read(child, "SelectedModularWeaponPart") == prior, "single-slot roll preserves a surviving child selection", log);
+                            ++preservedChildren;
+                        }
+                    }
+                    Check(preservedChildren > 0, "non-recursive slot behavior exercised against real child points", log);
+                    Call(parentMenu, "PButton_HideUI");
+                }
                 var build = (MonoBehaviour)platform.GetComponent(controller.GetType().Assembly.GetType("Gundomizer.WorkshopBuildControl"));
                 Check(build != null, "platform has whole-build control", log);
                 var buildButton = (MonoBehaviour)Read(build, "button");
@@ -190,9 +211,28 @@ public static class WorkshopChecks
                 Check(buildButton != null && buildButton.gameObject.activeInHierarchy, "compact build dice is visible beside cog", log);
                 Check((bool)Read(buildButton, "Rainbow"), "build dice uses the standard animated rainbow", log);
                 Check(buildButton.transform.IsChildOf(platform.GetComponentInParent<FVRPhysicalObject>().transform), "build control moves with platform", log);
+                var body = platform.GetComponentInParent<FVRPhysicalObject>().transform;
+                var relative = body.InverseTransformPoint(buildButton.transform.position);
+                var bodyPosition = body.position; var bodyRotation = body.rotation; var bodyScale = body.localScale;
+                try
+                {
+                    body.position += new Vector3(.2f, .1f, -.1f);
+                    body.rotation = Quaternion.AngleAxis(40, Vector3.up) * body.rotation;
+                    body.localScale *= .8f;
+                    yield return null;
+                    Check(Vector3.Distance(buildButton.transform.position, body.TransformPoint(relative)) < .0001f,
+                        "build control retains its placement through platform movement, rotation and scaling", log);
+                }
+                finally { body.position = bodyPosition; body.rotation = bodyRotation; body.localScale = bodyScale; }
+                var cog = buildButton.transform.parent.parent.GetComponent<BoxCollider>();
+                var diceBox = buildButton.GetComponent<BoxCollider>();
+                var inCogFrame = new Bounds(cog.transform.InverseTransformPoint(diceBox.transform.TransformPoint(diceBox.center)), Vector3.zero);
+                foreach (int x in new[] { -1, 1 }) foreach (int y in new[] { -1, 1 }) foreach (int z in new[] { -1, 1 })
+                    inCogFrame.Encapsulate(cog.transform.InverseTransformPoint(diceBox.transform.TransformPoint(diceBox.center + Vector3.Scale(diceBox.size * .5f, new Vector3(x, y, z)))));
+                Check(!new Bounds(cog.center, cog.size).Intersects(inCogFrame), "build dice hitbox is separate from native cog", log);
                 Call(buildButton, "OnPointerEnter", new object[] { null }); yield return new WaitForEndOfFrame();
                 Check(((Text)Read(build, "tooltip")).text.StartsWith("Randomize build"), "build hover identifies the whole-build action", log);
-                CaptureBuild(platform, buildButton, Path.Combine(directory, source.ItemID + "-build-control.png"));
+                CaptureBuild(platform, buildButton, ViewerFront(spawner), Path.Combine(directory, source.ItemID + "-build-control.png"));
                 CapturePlatform(platform.gameObject, instance, menus[0], Path.Combine(directory, source.ItemID + "-build-hover.jpg"));
                 Call(buildButton, "OnPointerExit", new object[] { null });
                 var states = new HashSet<string>(); int nested = 0;
@@ -318,15 +358,15 @@ public static class WorkshopChecks
         camera.orthographicSize = Mathf.Max(bounds.size.y * Mathf.Abs(panel.lossyScale.y), bounds.size.x * Mathf.Abs(panel.lossyScale.x) / camera.aspect) * .65f;
     }
 
-    private static void CaptureBuild(MonoBehaviour platform, MonoBehaviour button, string path)
+    private static void CaptureBuild(MonoBehaviour platform, MonoBehaviour button, Vector3 front, string path)
     {
         var obj = new GameObject("Build control capture"); var camera = obj.AddComponent<Camera>();
         var texture = new RenderTexture(1000, 600, 24); var pixels = new Texture2D(1000, 600, TextureFormat.RGB24, false);
         var previous = RenderTexture.active;
         try
         {
-            camera.transform.rotation = button.transform.rotation;
-            camera.transform.position = button.transform.position - button.transform.forward * .4f;
+            camera.transform.position = button.transform.position + front * .28f + Vector3.up * .16f;
+            camera.transform.LookAt(button.transform.position, Vector3.up);
             camera.orthographic = true; camera.orthographicSize = .09f; camera.nearClipPlane = .001f; camera.farClipPlane = 2;
             camera.clearFlags = CameraClearFlags.SolidColor; camera.backgroundColor = new Color(.04f, .04f, .04f);
             camera.targetTexture = texture; camera.Render(); RenderTexture.active = texture;

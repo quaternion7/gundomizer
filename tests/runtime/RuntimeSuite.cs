@@ -13,6 +13,7 @@ using Object = UnityEngine.Object;
 
 public static class RuntimeSuite
 {
+    private static GameObject spectator;
     private static bool NativeLoading { get { return GM.IsAsyncLoading
         || (bool)AccessTools.Property(typeof(GM), "IsLoadingVaultFile").GetValue(null, null)
         || (GM.CurrentSceneSettings != null && GM.CurrentSceneSettings.IsInvoking("LoadDefaultSceneRoutine")); } }
@@ -25,6 +26,17 @@ public static class RuntimeSuite
     }
 
     public static IEnumerator Run(string directory, Action<string> log)
+    {
+        var checks = RunChecks(directory, log);
+        try { while (checks.MoveNext()) yield return checks.Current; }
+        finally
+        {
+            (checks as IDisposable).Dispose();
+            if (spectator != null) Object.Destroy(spectator);
+        }
+    }
+
+    private static IEnumerator RunChecks(string directory, Action<string> log)
     {
         if (File.Exists(Path.Combine(directory, "modular-magazine-checks.txt")) || File.Exists(Path.Combine(directory, "compatible-panel-checks.txt"))
             || File.Exists(Path.Combine(directory, "workshop-checks.txt")))
@@ -68,6 +80,17 @@ public static class RuntimeSuite
         Check(spawner != null, "live native ItemSpawnerV2 exists", log);
         var controller = spawner.GetComponents<MonoBehaviour>().FirstOrDefault(c => c.GetType().FullName == "Gundomizer.RandomizerController");
         Check(controller != null && controller.enabled, "Gundomizer attached and initialized", log);
+        if (!File.Exists(Path.Combine(directory, "workshop-checks.txt")))
+        {
+            var canvas = Get<RectTransform>(controller, "uiRoot").parent as RectTransform;
+            spectator = new GameObject("Spawner test spectator");
+            var camera = spectator.AddComponent<Camera>(); camera.depth = 1000;
+            camera.transform.rotation = canvas.rotation;
+            camera.transform.position = canvas.TransformPoint(canvas.rect.center) - canvas.forward * 2;
+            camera.orthographic = true;
+            camera.orthographicSize = Mathf.Max(canvas.rect.height * Mathf.Abs(canvas.lossyScale.y), canvas.rect.width * Mathf.Abs(canvas.lossyScale.x) / camera.aspect) * .7f;
+            camera.nearClipPlane = .01f; camera.farClipPlane = 50;
+        }
         if (File.Exists(Path.Combine(directory, "workshop-checks.txt")))
         {
             var checks = WorkshopChecks.Run(spawner, controller, directory, log);

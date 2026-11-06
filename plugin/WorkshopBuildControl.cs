@@ -67,10 +67,11 @@ namespace Gundomizer
             // The switch hides its instruction sprite until touched. Follow the switch
             // itself so the dice remains visible when that sprite is inactive.
             root.SetParent(cog.transform.parent, false);
-            float width = cog.sprite.bounds.size.x;
-            root.localPosition = cog.transform.localPosition + cog.transform.localRotation * Vector3.Scale(cog.transform.localScale, new Vector3(-width * 1.05f, 0, width * .3f));
-            root.localRotation = cog.transform.localRotation * Quaternion.Euler(0, 180, 0);
-            root.localScale = cog.transform.localScale * (width * .8f / 100);
+            // Calibrated in the native switch's local frame, so moving/scaling the
+            // platform also moves/scales the control without world-space corrections.
+            root.localPosition = new Vector3(-7.981232f, 1.680279f, .6802022f);
+            root.localRotation = Quaternion.Euler(0, 180, 0);
+            root.localScale = Vector3.one * .05770533f;
             root.sizeDelta = new Vector2(100, 100);
             canvasObject.GetComponent<Canvas>().renderMode = RenderMode.WorldSpace;
             rainbow = RandomizerController.MakeRainbowTexture();
@@ -79,7 +80,8 @@ namespace Gundomizer
             rect.localScale = Vector3.one; rect.sizeDelta = new Vector2(100, 100);
             rect.localPosition = Vector3.zero;
             var box = button.GetComponent<BoxCollider>() ?? button.gameObject.AddComponent<BoxCollider>();
-            box.center = Vector3.zero; box.size = new Vector3(100, 100, 8);
+            // Inset the click target slightly so its edge stays clear of the native cog.
+            box.center = Vector3.zero; box.size = new Vector3(86, 92, 8);
             button.Ready = () => isActiveAndEnabled && (Busy || HasModularTarget());
             button.Handler = hand => Activate();
             var tip = new GameObject("Build tooltip", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
@@ -87,6 +89,7 @@ namespace Gundomizer
             tip.GetComponent<Image>().color = new Color(.03f, .035f, .04f, .98f); tip.GetComponent<Image>().raycastTarget = false;
             var tipRect = (RectTransform)tip.transform; tipRect.sizeDelta = new Vector2(550, 100);
             tipRect.localPosition = new Vector3(0, 115, -5);
+            tipRect.localRotation = Quaternion.Euler(0, 180, 0); // Face the player above the platform.
             tooltip = new GameObject("Label", typeof(RectTransform), typeof(CanvasRenderer), typeof(Text)).GetComponent<Text>();
             tooltip.gameObject.layer = template.layer; tooltip.rectTransform.SetParent(tip.transform, false);
             tooltip.rectTransform.anchorMin = Vector2.zero; tooltip.rectTransform.anchorMax = Vector2.one;
