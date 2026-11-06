@@ -56,6 +56,10 @@ public static class WorkshopChecks
                 break;
             }
             Check(platform != null, "real workshop platform spawned", log);
+            var spectatorObject = new GameObject("Workshop test spectator"); created.Add(spectatorObject);
+            var spectator = spectatorObject.AddComponent<Camera>();
+            spectator.depth = 1000; spectator.nearClipPlane = .01f; spectator.farClipPlane = 50;
+            spectator.clearFlags = CameraClearFlags.Skybox;
             var slot = (FVRQuickBeltSlot)Read(platform, "QuickBeltSlot");
             int fixtureCount = 0, rollCount = 0;
             var candidates = IM.OD.Values.Where(o => o.Category == FVRObject.ObjectCategory.Firearm
@@ -73,12 +77,24 @@ public static class WorkshopChecks
                 var screens = (IDictionary)Read(platform, "_UIScreens");
                 Check(screens.Count > 0, source.ItemID + " docking creates native menus", log);
                 var menus = screens.Values.Cast<GameObject>().SelectMany(g => g.GetComponents<MonoBehaviour>()).Where(IsMenu).ToArray();
+                Watch(spectator, platform, instance, menus[0]);
+                if (File.Exists(Path.Combine(directory, "workshop-placement-mode.txt")))
+                {
+                    var buildControl = platform.GetComponent(controller.GetType().Assembly.GetType("Gundomizer.WorkshopBuildControl"));
+                    var dice = (MonoBehaviour)Read(buildControl, "button");
+                    var editor = spectatorObject.AddComponent<WorkshopPlacementEditor>();
+                    editor.Setup(dice.transform.parent, spectator, directory, log);
+                    log("PLACEMENT EDITOR READY — move/rotate the rainbow build control; edits autosave locally.");
+                    while (!File.Exists(Path.Combine(directory, "workshop-placement-finish.txt"))) yield return null;
+                    yield break;
+                }
                 yield return new WaitForEndOfFrame();
                 CapturePlatform(platform.gameObject, instance, menus[0], Path.Combine(directory, source.ItemID + "-platform.jpg"));
                 var stockMenu = menus.FirstOrDefault(m => Read(m, "PartType").ToString() == "Stock" && !(bool)Read(m, "_skinOnlyMode"));
                 if (stockMenu != null)
                 {
                     Call(stockMenu, "PButton_ShowUI"); yield return null; yield return new WaitForEndOfFrame();
+                    WatchMenu(spectator, stockMenu);
                     CheckControl(stockMenu, log);
                     Capture(stockMenu, Path.Combine(directory, source.ItemID + "-stock-menu.png"));
                     Call(ControlButton(stockMenu), "OnPointerEnter", new object[] { null });
@@ -116,6 +132,7 @@ public static class WorkshopChecks
                     if (prefabs.Cast<GameObject>().Any(p => ((Array)Read(p.GetComponent(mw.GetType("ModularWorkshop.ModularWeaponPart")), "SubAttachmentPoints")).Length > 0
                         || ((string[])Read(p.GetComponent(mw.GetType("ModularWorkshop.ModularWeaponPart")), "AlsoOccupiesPointWithModularPartsGroupIDs")).Length > 0)) continue;
                     Call(menu, "PButton_ShowUI"); yield return null; yield return new WaitForEndOfFrame();
+                    WatchMenu(spectator, menu);
                     CheckControl(menu, log);
                     Capture(menu, Path.Combine(directory, source.ItemID + "-slot-before.png"));
                     var roll = AccessTools.Method(controller.GetType().Assembly.GetType("Gundomizer.ModularWorkshopBridge"), "TryRandomizeSlot");
@@ -147,7 +164,75 @@ public static class WorkshopChecks
                     Call(menu, "PButton_HideUI");
                     break;
                 }
-                physical.SetQuickBeltSlot(null); yield return null;
+                var build = (MonoBehaviour)platform.GetComponent(controller.GetType().Assembly.GetType("Gundomizer.WorkshopBuildControl"));
+                Check(build != null, "platform has whole-build control", log);
+                var buildButton = (MonoBehaviour)Read(build, "button");
+                Watch(spectator, platform, instance, menus[0]);
+                Check(buildButton != null && buildButton.gameObject.activeInHierarchy, "compact build dice is visible beside cog", log);
+                Check((bool)Read(buildButton, "Rainbow"), "build dice uses the standard animated rainbow", log);
+                Check(buildButton.transform.IsChildOf(platform.GetComponentInParent<FVRPhysicalObject>().transform), "build control moves with platform", log);
+                Call(buildButton, "OnPointerEnter", new object[] { null }); yield return new WaitForEndOfFrame();
+                Check(((Text)Read(build, "tooltip")).text.StartsWith("Randomize build"), "build hover identifies the whole-build action", log);
+                CaptureBuild(platform, buildButton, Path.Combine(directory, source.ItemID + "-build-control.png"));
+                CapturePlatform(platform.gameObject, instance, menus[0], Path.Combine(directory, source.ItemID + "-build-hover.jpg"));
+                Call(buildButton, "OnPointerExit", new object[] { null });
+                var states = new HashSet<string>(); int nested = 0;
+                var targetObject = Read(menus.First(m => !(bool)Read(m, "_skinOnlyMode")), "ModularWeapon");
+                var rootPoints = (IDictionary)Property(targetObject, "AllAttachmentPoints");
+                var excludedMenu = menus.Last(m => !(bool)Read(m, "_skinOnlyMode") && Read(m, "PartType").ToString() != "SubAttachmentPoint");
+                var excluded = rootPoints[(string)Read(excludedMenu, "ModularPartsGroupID")];
+                bool excludedBefore = (bool)Read(excluded, "DisallowTakeAndHoldRandomization");
+                string excludedSelection = (string)Read(excluded, "SelectedModularWeaponPart");
+                AccessTools.Field(excluded.GetType(), "DisallowTakeAndHoldRandomization").SetValue(excluded, true);
+                try
+                {
+                    for (int i = 0; i < 8; ++i)
+                    {
+                        yield return new WaitForSecondsRealtime(.2f);
+                        buildButton.GetComponent<Button>().onClick.Invoke();
+                        Check((bool)Property(build, "Busy"), "whole-build click starts a cooperative roll", log);
+                        object[] busyArgs = { menus.First(m => !(bool)Read(m, "_skinOnlyMode")), null };
+                        Check(!(bool)AccessTools.Method(controller.GetType().Assembly.GetType("Gundomizer.ModularWorkshopBridge"), "TryRandomizeSlot").Invoke(null, busyArgs), "slot clicks cannot interleave with build roll", log);
+                        float finish = Time.realtimeSinceStartup + 20;
+                        while ((bool)Property(build, "Busy") && Time.realtimeSinceStartup < finish) yield return null;
+                        Check(!(bool)Property(build, "Busy") && ((string)Property(build, "Status")).StartsWith("Randomized "), "whole-build roll finishes: " + Property(build, "Status"), log);
+                        Check(slot.HeldObject == physical, "whole-build roll retains the original receiver", log);
+                        Check((string)Read(excluded, "SelectedModularWeaponPart") == excludedSelection, "whole-build roll respects author-excluded point", log);
+                        var selections = Selected(targetObject);
+                        states.Add(string.Join(";", selections.OrderBy(p => p.Key).Select(p => p.Key + "=" + p.Value).ToArray()));
+                        foreach (DictionaryEntry entry in (IDictionary)Property(targetObject, "AllAttachmentPoints"))
+                        {
+                            if ((bool)Read(entry.Value, "IsPointDisabled") || (bool)Read(entry.Value, "DisallowTakeAndHoldRandomization")) continue;
+                            var pool = (IList)Property(groups[entry.Key], "TakeAndHoldSpawnPool");
+                            if (pool.Count > 0) Check(pool.Contains(Read(entry.Value, "SelectedModularWeaponPart")), "build part belongs to authored pool: " + entry.Key, log);
+                        }
+                        nested = Math.Max(nested, ((IList)Property(targetObject, "SubAttachmentPoints")).Count);
+                    }
+                }
+                finally { AccessTools.Field(excluded.GetType(), "DisallowTakeAndHoldRandomization").SetValue(excluded, excludedBefore); }
+                Check(states.Count > 1, "repeated build rolls produce varied assemblies", log);
+                if (source.ItemID == "PMM9mm") Check(nested > 0, "build roll traversed real nested slots", log);
+                log("WORKSHOP BUILD " + source.ItemID + " distinct=" + states.Count + " maxNested=" + nested);
+                var savedSelections = Selected(targetObject);
+                var restored = Object.Instantiate(request.Result, platform.transform.position + Vector3.up * 2, Quaternion.identity);
+                created.Add(restored); yield return null;
+                restored.GetComponent<FVRPhysicalObject>().ConfigureFromFlagDic(physical.GetFlagDic());
+                yield return null; yield return null;
+                var restoredTarget = restored.GetComponents<MonoBehaviour>().First(c => c != null && c.GetType().GetInterfaces().Any(t => t.FullName == "ModularWorkshop.IModularWeapon"));
+                var restoredSelections = Selected(restoredTarget);
+                Check(savedSelections.Count == restoredSelections.Count && savedSelections.All(p => restoredSelections.ContainsKey(p.Key) && restoredSelections[p.Key] == p.Value), "randomized build survives native save/load flags", log);
+                Object.Destroy(restored);
+                Call(build, "Activate"); Call(build, "Activate"); yield return null; yield return null;
+                Check(!(bool)Property(build, "Busy") && ((string)Property(build, "Status")).Contains("cancelled"), "second activation cancels a pending build roll", log);
+                var freshMenus = ((IDictionary)Read(platform, "_UIScreens")).Values.Cast<GameObject>().SelectMany(g => g.GetComponents<MonoBehaviour>()).Where(IsMenu).ToArray();
+                CapturePlatform(platform.gameObject, instance, freshMenus[0], Path.Combine(directory, source.ItemID + "-build-complete.jpg"));
+                yield return new WaitForSecondsRealtime(.2f);
+                buildButton.GetComponent<Button>().onClick.Invoke();
+                Check((bool)Property(build, "Busy"), "build roll active before undocking", log);
+                physical.SetQuickBeltSlot(null); yield return null; yield return null;
+                Check(!(bool)Property(build, "Busy") && ((string)Property(build, "Status")).Contains("cancelled"), "undocking cancels the pending build roll", log);
+                yield return new WaitForEndOfFrame();
+                Check(!buildButton.GetComponent<Button>().interactable, "empty platform disables build dice", log);
                 Check(((IDictionary)Read(platform, "_UIScreens")).Count == 0, "undocking removes generated menus", log);
                 Object.Destroy(instance); ++fixtureCount;
                 if (fixtureCount >= 2) break;
@@ -162,6 +247,47 @@ public static class WorkshopChecks
     {
         var control = menu.GetComponents<MonoBehaviour>().First(c => c.GetType().FullName == "Gundomizer.WorkshopSlotControl");
         return (MonoBehaviour)Read(control, "button");
+    }
+
+    private static void Watch(Camera camera, MonoBehaviour platform, GameObject weapon, MonoBehaviour menu)
+    {
+        var body = platform.GetComponentInParent<FVRPhysicalObject>();
+        var bounds = new Bounds(body.transform.position, Vector3.zero);
+        foreach (var renderer in weapon.GetComponentsInChildren<Renderer>()) bounds.Encapsulate(renderer.bounds);
+        camera.transform.rotation = menu.transform.rotation;
+        camera.transform.position = bounds.center + Vector3.up * .15f - menu.transform.forward * 3;
+        camera.orthographic = true; camera.orthographicSize = Mathf.Max(.65f, bounds.extents.magnitude * 1.2f);
+    }
+
+    private static void WatchMenu(Camera camera, MonoBehaviour menu)
+    {
+        var panel = ((GameObject)Read(menu, "MainCanvas")).GetComponent<RectTransform>();
+        var bounds = RectTransformUtility.CalculateRelativeRectTransformBounds(panel);
+        camera.transform.rotation = panel.rotation;
+        camera.transform.position = panel.TransformPoint(bounds.center) - panel.forward * 2;
+        camera.orthographic = true;
+        camera.orthographicSize = Mathf.Max(bounds.size.y * Mathf.Abs(panel.lossyScale.y), bounds.size.x * Mathf.Abs(panel.lossyScale.x) / camera.aspect) * .65f;
+    }
+
+    private static void CaptureBuild(MonoBehaviour platform, MonoBehaviour button, string path)
+    {
+        var obj = new GameObject("Build control capture"); var camera = obj.AddComponent<Camera>();
+        var texture = new RenderTexture(1000, 600, 24); var pixels = new Texture2D(1000, 600, TextureFormat.RGB24, false);
+        var previous = RenderTexture.active;
+        try
+        {
+            camera.transform.rotation = button.transform.rotation;
+            camera.transform.position = button.transform.position - button.transform.forward * .4f;
+            camera.orthographic = true; camera.orthographicSize = .09f; camera.nearClipPlane = .001f; camera.farClipPlane = 2;
+            camera.clearFlags = CameraClearFlags.SolidColor; camera.backgroundColor = new Color(.04f, .04f, .04f);
+            camera.targetTexture = texture; camera.Render(); RenderTexture.active = texture;
+            pixels.ReadPixels(new Rect(0, 0, 1000, 600), 0, 0); pixels.Apply(); File.WriteAllBytes(path, pixels.EncodeToPNG());
+        }
+        finally
+        {
+            RenderTexture.active = previous; camera.targetTexture = null;
+            Object.Destroy(obj); Object.Destroy(texture); Object.Destroy(pixels);
+        }
     }
 
     private static void CheckControl(MonoBehaviour menu, Action<string> log)

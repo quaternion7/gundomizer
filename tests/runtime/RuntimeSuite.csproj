@@ -15,6 +15,7 @@
     <Compile Include="ModularMagazineChecks.cs" />
     <Compile Include="CompatiblePanelChecks.cs" />
     <Compile Include="WorkshopChecks.cs" />
+    <Compile Include="WorkshopPlacementEditor.cs" />
     <Compile Include="IndexChecks.cs" />
     <Compile Include="AmmoModChecks.cs" />
     <Compile Include="AmmoFillChecks.cs" />

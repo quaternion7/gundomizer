@@ -13,6 +13,7 @@ Randomize items directly in **Item Spawner V2**, including the **toolbox tablet*
 - **Spawn or preview:** spawn immediately, or select a result to inspect, accept, or reroll.
 - **Auto-fill:** replace loaded rounds and fill the held magazine or weapon, while still spawning the loose round.
 - **Continuous search:** shows loading progress; click the active button again to cancel.
+- **Modular Workshop:** rainbow dice below each part menu rerolls that slot; the compact dice beside the platform cog rerolls the build, including nested parts. Uses the framework's weighted pools and exclusions.
 
 ## Mod compatibility
 

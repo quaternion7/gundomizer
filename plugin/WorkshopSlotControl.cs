@@ -30,7 +30,7 @@ namespace Gundomizer
             {
                 rainbow = RandomizerController.MakeRainbowTexture();
                 button = ButtonFactory.Create(template, parent, "Random modular slot", false, 0, 0, 1, rainbow);
-                button.Ready = () => ready && menu != null && button.gameObject.activeInHierarchy;
+                button.Ready = () => ready && menu != null && button.gameObject.activeInHierarchy && !ModularWorkshopBridge.IsBusy(menu);
                 button.Handler = hand =>
                 {
                     ModularWorkshopBridge.TryRandomizeSlot(menu, out status);

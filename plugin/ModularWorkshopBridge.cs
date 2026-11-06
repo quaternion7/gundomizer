@@ -17,7 +17,29 @@ namespace Gundomizer
             var type = info.Instance.GetType().Assembly.GetType("ModularWorkshop.ModularWorkshopUI", true);
             harmony.Patch(AccessTools.Method(type, "UpdateDisplay"),
                 postfix: new HarmonyMethod(typeof(ModularWorkshopBridge), nameof(AfterDisplay)));
-            Plugin.Log.LogInfo("Enabled optional Modular Workshop slot controls.");
+            harmony.Patch(AccessTools.Method(type.Assembly.GetType("ModularWorkshop.ModularWorkshopPlatform", true), "Update"),
+                postfix: new HarmonyMethod(typeof(ModularWorkshopBridge), nameof(AfterPlatformUpdate)));
+            Plugin.Log.LogInfo("Enabled optional Modular Workshop randomizer controls.");
+        }
+
+        private static void AfterPlatformUpdate(MonoBehaviour __instance)
+        {
+            var control = __instance.GetComponent<WorkshopBuildControl>() ?? __instance.gameObject.AddComponent<WorkshopBuildControl>();
+            if (!control.enabled) return;
+            try { control.Refresh(__instance); }
+            catch (Exception ex)
+            {
+                control.enabled = false;
+                Plugin.Log.LogWarning("Could not refresh modular build control: " + ex);
+            }
+        }
+
+        internal static bool IsBusy(MonoBehaviour menu)
+        {
+            object target = Read(menu, "ModularWeapon") ?? Read(menu, "ModularPhysicalObject");
+            var platform = target == null ? null : AccessTools.Property(target.GetType(), "WorkshopPlatform").GetValue(target, null) as MonoBehaviour;
+            var control = platform == null ? null : platform.GetComponent<WorkshopBuildControl>();
+            return control != null && control.Busy;
         }
 
         private static void AfterDisplay(MonoBehaviour __instance)
@@ -31,18 +53,27 @@ namespace Gundomizer
             catch (Exception ex) { Plugin.Log.LogWarning("Could not refresh modular slot control: " + ex.Message); }
         }
 
-        internal static bool CanRandomizeSlot(MonoBehaviour menu)
+        internal static bool CanRandomizeSlot(MonoBehaviour menu, bool wholeBuild = false)
         {
             object definition; string message;
-            try { return TryDefinition(menu, out definition, out message); }
+            try { return TryDefinition(menu, out definition, out message, wholeBuild); }
             catch { return false; }
         }
 
         internal static bool TryRandomizeSlot(MonoBehaviour menu, out string message)
+            => RandomizeSlot(menu, false, out message);
+
+        internal static bool TryRandomizeBuildSlot(MonoBehaviour menu, out string message)
+            => RandomizeSlot(menu, true, out message);
+
+        private static bool RandomizeSlot(MonoBehaviour menu, bool wholeBuild, out string message)
         {
             message = "No modular part menu available.";
             try
             {
+                if (!wholeBuild && IsBusy(menu)) { message = "Build randomization is in progress."; return false; }
+                if (wholeBuild && (bool)Read(menu, "_isShowingSkins"))
+                    AccessTools.Method(menu.GetType(), "PButton_HideSkins").Invoke(menu, null);
                 object definition;
                 if (!TryDefinition(menu, out definition, out message)) return false;
                 var type = menu.GetType();
@@ -69,14 +100,14 @@ namespace Gundomizer
             }
         }
 
-        private static bool TryDefinition(MonoBehaviour menu, out object definition, out string message)
+        private static bool TryDefinition(MonoBehaviour menu, out object definition, out string message, bool wholeBuild = false)
         {
             definition = null; message = "No modular part menu available.";
             if (menu == null) return false;
             var type = menu.GetType();
             while (type != null && type.FullName != "ModularWorkshop.ModularWorkshopUI") type = type.BaseType;
             if (type == null) return false;
-            if ((bool)Read(menu, "_skinOnlyMode") || (bool)Read(menu, "_isShowingSkins"))
+            if ((bool)Read(menu, "_skinOnlyMode") || (!wholeBuild && (bool)Read(menu, "_isShowingSkins")))
             { message = "Choose a parts menu to randomize this slot."; return false; }
             object target = Read(menu, "ModularWeapon") ?? Read(menu, "ModularPhysicalObject");
             if (target == null || (target is UnityEngine.Object && (UnityEngine.Object)target == null)) return false;
