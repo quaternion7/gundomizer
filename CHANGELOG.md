@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+Add optional Modular Workshop dice buttons beneath each part menu's Hide UI / Skins controls. Each button rerolls only its own slot through the framework's native weighted pool and manual selection action.
+
 ## 1.1.0
 
 Add compatible item choices: type and connector toggles, with current-section/tag or all-item scope. The global scope includes modular magazines stored under Firearms.

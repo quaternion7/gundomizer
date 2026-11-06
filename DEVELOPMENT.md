@@ -31,4 +31,4 @@ Use `-ReadmePreview -UseInstalledBuild` to capture the installed version with co
 
 `-ModularMagazineChecks` checks magazine classification and indexing with ModulAK and the standalone ModulAR2 Magazines pack installed. `-CompatiblePanelChecks` uses those fixtures to check global scope, connector exclusions, preview/spawn behavior and the toolbox tablet, and captures the panel. Both can run with original OtherLoader or OtherLoaderPatched.
 
-`-WorkshopChecks` exercises the optional one-slot Modular Workshop bridge through real platform menus. Install Modular Workshop, its platform, Modul PM, Modul XM8 Redux and their dependencies in a separate test profile. It captures native menus and checks weighted-pool selection, unrelated slots, exclusions and undocking. The prototype adds no player-facing controls yet.
+`-WorkshopChecks` exercises the optional Modular Workshop slot dice through real platform menus. Install Modular Workshop, its platform, Modul PM, Modul XM8 Redux and their dependencies in a separate test profile. It captures menus and checks button placement, skin-mode visibility, weighted-pool selection, unrelated slots, exclusions and undocking.

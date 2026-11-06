@@ -22,16 +22,16 @@ namespace Gundomizer
         private float nextActivation;
         internal void Activate(FVRViveHand hand)
         {
-            if (Time.unscaledTime < nextActivation || Owner == null) return;
-            if (Owner.CanCancel(this))
+            if (Time.unscaledTime < nextActivation || (Owner == null && Handler == null)) return;
+            if (Owner != null && Owner.CanCancel(this))
             {
                 nextActivation = Time.unscaledTime + .15f;
                 Owner.CancelRoll();
                 return;
             }
-            if (!Owner.CanClick(false)) return;
-            if (Compatible || NeedsHeldContext) Owner.RefreshHeldItem(hand);
-            if (!(Ready == null ? Owner.CanClick(Compatible) : Ready())) return;
+            if (Owner != null && !Owner.CanClick(false)) return;
+            if (Owner != null && (Compatible || NeedsHeldContext)) Owner.RefreshHeldItem(hand);
+            if (!(Ready == null ? Owner != null && Owner.CanClick(Compatible) : Ready())) return;
             nextActivation = Time.unscaledTime + 0.15f;
             if (Handler != null) Handler(hand); else Owner.Click(Compatible, hand);
         }
@@ -41,7 +41,7 @@ namespace Gundomizer
         public override void OnPoint(FVRViveHand hand)
         {
             base.OnPoint(hand);
-            if (Owner != null && hand.CurrentInteractable == null && hand.Input.TriggerDown)
+            if ((Owner != null || Handler != null) && hand.CurrentInteractable == null && hand.Input.TriggerDown)
                 Activate(hand);
         }
 
@@ -50,8 +50,8 @@ namespace Gundomizer
 
         private void LateUpdate()
         {
-            if (Owner == null) return;
-            bool ready = Owner.CanCancel(this) || (Ready == null ? Owner.CanClick(Compatible) : Ready());
+            if (Owner == null && Handler == null) return;
+            bool ready = (Owner != null && Owner.CanCancel(this)) || (Ready == null ? Owner != null && Owner.CanClick(Compatible) : Ready());
             // Native pointables invoke callbacks directly, so readiness is checked again by Click.
             UiButton.interactable = ready;
             if (Background != null)

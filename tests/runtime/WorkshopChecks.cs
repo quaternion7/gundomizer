@@ -79,8 +79,25 @@ public static class WorkshopChecks
                 if (stockMenu != null)
                 {
                     Call(stockMenu, "PButton_ShowUI"); yield return null; yield return new WaitForEndOfFrame();
+                    CheckControl(stockMenu, log);
                     Capture(stockMenu, Path.Combine(directory, source.ItemID + "-stock-menu.png"));
+                    Call(ControlButton(stockMenu), "OnPointerEnter", new object[] { null });
+                    yield return new WaitForEndOfFrame();
+                    var stockControl = stockMenu.GetComponent(controller.GetType().Assembly.GetType("Gundomizer.WorkshopSlotControl"));
+                    var tooltip = (Text)Read(stockControl, "tooltip");
+                    Check(tooltip.transform.parent.gameObject.activeInHierarchy && tooltip.text.Contains("Randomize"), "hover identifies the slot action", log);
+                    Check(!tooltip.raycastTarget && !tooltip.transform.parent.GetComponent<Image>().raycastTarget, "hover feedback does not intercept native pointer input", log);
+                    Capture(stockMenu, Path.Combine(directory, source.ItemID + "-stock-hover.png"));
+                    Call(ControlButton(stockMenu), "OnPointerExit", new object[] { null });
+                    if (((GameObject)Read(stockMenu, "ShowSkinsButton")).activeInHierarchy)
+                    {
+                        Call(stockMenu, "PButton_ShowSkins"); yield return null;
+                        Check(!ControlButton(stockMenu).gameObject.activeInHierarchy, "slot dice hides in skin mode", log);
+                        Call(stockMenu, "PButton_HideSkins"); yield return null;
+                        Check(ControlButton(stockMenu).gameObject.activeInHierarchy, "slot dice returns in part mode", log);
+                    }
                     Call(stockMenu, "PButton_HideUI");
+                    Check(!ControlButton(stockMenu).gameObject.activeInHierarchy, "collapsed menu hides its slot dice", log);
                 }
                 foreach (var menu in menus)
                 {
@@ -99,13 +116,16 @@ public static class WorkshopChecks
                     if (prefabs.Cast<GameObject>().Any(p => ((Array)Read(p.GetComponent(mw.GetType("ModularWorkshop.ModularWeaponPart")), "SubAttachmentPoints")).Length > 0
                         || ((string[])Read(p.GetComponent(mw.GetType("ModularWorkshop.ModularWeaponPart")), "AlsoOccupiesPointWithModularPartsGroupIDs")).Length > 0)) continue;
                     Call(menu, "PButton_ShowUI"); yield return null; yield return new WaitForEndOfFrame();
+                    CheckControl(menu, log);
                     Capture(menu, Path.Combine(directory, source.ItemID + "-slot-before.png"));
                     var roll = AccessTools.Method(controller.GetType().Assembly.GetType("Gundomizer.ModularWorkshopBridge"), "TryRandomizeSlot");
                     var before = Selected(target); var chosen = new HashSet<string>();
                     for (int i = 0; i < 8; ++i)
                     {
-                        object[] args = { menu, null };
-                        Check((bool)roll.Invoke(null, args), source.ItemID + " slot roll " + i + " succeeds: " + args[1], log);
+                        yield return new WaitForSecondsRealtime(.2f);
+                        ControlButton(menu).GetComponent<Button>().onClick.Invoke();
+                        string status = (string)Read(menu.GetComponent(controller.GetType().Assembly.GetType("Gundomizer.WorkshopSlotControl")), "status");
+                        Check(status != null && status.StartsWith("Selected "), source.ItemID + " dice click " + i + " succeeds: " + status, log);
                         yield return null;
                         var after = Selected(target); chosen.Add(after[group]);
                         Check(pool.Cast<string>().Contains(after[group]), "selected part belongs to native weighted pool", log);
@@ -117,8 +137,13 @@ public static class WorkshopChecks
                     bool prior = (bool)Read(point, "DisallowTakeAndHoldRandomization");
                     AccessTools.Field(point.GetType(), "DisallowTakeAndHoldRandomization").SetValue(point, true);
                     object[] excludedArgs = { menu, null };
-                    try { Check(!(bool)roll.Invoke(null, excludedArgs), "author-excluded slots cannot be randomized", log); }
-                    finally { AccessTools.Field(point.GetType(), "DisallowTakeAndHoldRandomization").SetValue(point, prior); }
+                    try
+                    {
+                        Call(menu, "UpdateDisplay"); yield return new WaitForEndOfFrame();
+                        Check(!ControlButton(menu).GetComponent<Button>().interactable, "author-excluded slot dice is disabled", log);
+                        Check(!(bool)roll.Invoke(null, excludedArgs), "author-excluded slots cannot be randomized", log);
+                    }
+                    finally { AccessTools.Field(point.GetType(), "DisallowTakeAndHoldRandomization").SetValue(point, prior); Call(menu, "UpdateDisplay"); }
                     Call(menu, "PButton_HideUI");
                     break;
                 }
@@ -131,6 +156,31 @@ public static class WorkshopChecks
             log("WORKSHOP PROTOTYPE CHECKS PASSED");
         }
         finally { foreach (var instance in created) if (instance != null) Object.Destroy(instance); }
+    }
+
+    private static MonoBehaviour ControlButton(MonoBehaviour menu)
+    {
+        var control = menu.GetComponents<MonoBehaviour>().First(c => c.GetType().FullName == "Gundomizer.WorkshopSlotControl");
+        return (MonoBehaviour)Read(control, "button");
+    }
+
+    private static void CheckControl(MonoBehaviour menu, Action<string> log)
+    {
+        var button = ControlButton(menu); var rect = (RectTransform)button.transform; var parent = rect.parent;
+        Check(button.gameObject.activeInHierarchy, "native part menu has an active slot dice", log);
+        var bounds = RectTransformUtility.CalculateRelativeRectTransformBounds(parent, rect);
+        foreach (string name in new[] { "HideButton", "ShowSkinsButton", "HideSkinsButton" })
+        {
+            var obj = (GameObject)Read(menu, name); if (obj == null || !obj.activeInHierarchy) continue;
+            var native = RectTransformUtility.CalculateRelativeRectTransformBounds(parent, obj.transform);
+            Check(bounds.max.y < native.min.y, "dice sits below active " + name, log);
+        }
+        var box = new Rect(bounds.min.x, bounds.min.y, bounds.size.x, bounds.size.y);
+        foreach (var native in menu.GetComponentsInChildren<FVRPointableButton>())
+        {
+            var other = RectTransformUtility.CalculateRelativeRectTransformBounds(parent, native.transform);
+            Check(!box.Overlaps(new Rect(other.min.x, other.min.y, other.size.x, other.size.y)), "dice does not overlap " + native.name, log);
+        }
     }
 
     private static void Capture(MonoBehaviour menu, string path)
