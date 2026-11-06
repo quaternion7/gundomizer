@@ -20,6 +20,7 @@ public sealed class RuntimeProbe : BaseUnityPlugin
         int index = Array.IndexOf(args, "-gundomizer-probe");
         if (index < 0 || index + 1 == args.Length) { enabled = false; return; }
         directory = Path.GetFullPath(args[index + 1]);
+        Application.runInBackground = true;
         Directory.CreateDirectory(directory);
         Log("READY " + Application.unityVersion + " args=" + string.Join(" ", args));
     }
