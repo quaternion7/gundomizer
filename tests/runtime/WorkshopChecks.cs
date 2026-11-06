@@ -123,10 +123,14 @@ public static class WorkshopChecks
                     Call(ControlButton(stockMenu), "OnPointerExit", new object[] { null });
                     if (((GameObject)Read(stockMenu, "ShowSkinsButton")).activeInHierarchy)
                     {
+                        var dicePosition = ControlButton(stockMenu).transform.localPosition;
                         Call(stockMenu, "PButton_ShowSkins"); yield return null;
-                        Check(!ControlButton(stockMenu).gameObject.activeInHierarchy, "slot dice hides in skin mode", log);
+                        Check(ControlButton(stockMenu).gameObject.activeInHierarchy && ControlButton(stockMenu).transform.localPosition == dicePosition, "slot dice stays fixed when switching to skins", log);
+                        var skinChecks = SkinRollChecks(stockMenu, directory, source.ItemID + "-part", log);
+                        try { while (skinChecks.MoveNext()) yield return skinChecks.Current; }
+                        finally { (skinChecks as IDisposable).Dispose(); }
                         Call(stockMenu, "PButton_HideSkins"); yield return null;
-                        Check(ControlButton(stockMenu).gameObject.activeInHierarchy, "slot dice returns in part mode", log);
+                        Check(ControlButton(stockMenu).gameObject.activeInHierarchy && ControlButton(stockMenu).transform.localPosition == dicePosition, "slot dice stays fixed when returning to parts", log);
                     }
                     Call(stockMenu, "PButton_HideUI");
                     Check(!ControlButton(stockMenu).gameObject.activeInHierarchy, "collapsed menu hides its slot dice", log);
@@ -153,14 +157,18 @@ public static class WorkshopChecks
                     Capture(menu, Path.Combine(directory, source.ItemID + "-slot-before.png"));
                     var roll = AccessTools.Method(controller.GetType().Assembly.GetType("Gundomizer.ModularWorkshopBridge"), "TryRandomizeSlot");
                     var before = Selected(target); var chosen = new HashSet<string>();
+                    var dicePosition = ControlButton(menu).transform.localPosition;
                     for (int i = 0; i < 8; ++i)
                     {
+                        string previousPart = Selected(target)[group];
                         yield return new WaitForSecondsRealtime(.2f);
                         ControlButton(menu).GetComponent<Button>().onClick.Invoke();
                         string status = (string)Read(menu.GetComponent(controller.GetType().Assembly.GetType("Gundomizer.WorkshopSlotControl")), "status");
                         Check(status != null && status.StartsWith("Selected "), source.ItemID + " dice click " + i + " succeeds: " + status, log);
                         yield return null;
                         var after = Selected(target); chosen.Add(after[group]);
+                        Check(after[group] != previousPart, "individual roll never reselects the current part", log);
+                        Check(ControlButton(menu).transform.localPosition == dicePosition, "dice does not move after a part roll", log);
                         Check(pool.Cast<string>().Contains(after[group]), "selected part belongs to native weighted pool", log);
                         Check(before.All(p => p.Key == group || (after.ContainsKey(p.Key) && after[p.Key] == p.Value)), "unrelated slots retain their selections", log);
                         ++rollCount;
@@ -179,6 +187,15 @@ public static class WorkshopChecks
                     finally { AccessTools.Field(point.GetType(), "DisallowTakeAndHoldRandomization").SetValue(point, prior); Call(menu, "UpdateDisplay"); }
                     Call(menu, "PButton_HideUI");
                     break;
+                }
+                var receiverMenu = menus.FirstOrDefault(m => (bool)Read(m, "_receiverSkinMode"));
+                if (receiverMenu != null)
+                {
+                    Call(receiverMenu, "PButton_ShowUI"); yield return null;
+                    var receiverChecks = SkinRollChecks(receiverMenu, directory, source.ItemID + "-receiver", log);
+                    try { while (receiverChecks.MoveNext()) yield return receiverChecks.Current; }
+                    finally { (receiverChecks as IDisposable).Dispose(); }
+                    Call(receiverMenu, "PButton_HideUI");
                 }
                 if (source.ItemID == "PMM9mm")
                 {
@@ -248,6 +265,7 @@ public static class WorkshopChecks
                     for (int i = 0; i < 8; ++i)
                     {
                         yield return new WaitForSecondsRealtime(.2f);
+                        string receiverBefore = (string)Read(Property(targetObject, "GetModularFVRFireArm"), "CurrentSelectedReceiverSkinID");
                         buildButton.GetComponent<Button>().onClick.Invoke();
                         Check((bool)Property(build, "Busy"), "whole-build click starts a cooperative roll", log);
                         object[] busyArgs = { menus.First(m => !(bool)Read(m, "_skinOnlyMode")), null };
@@ -256,6 +274,20 @@ public static class WorkshopChecks
                         while ((bool)Property(build, "Busy") && Time.realtimeSinceStartup < finish) yield return null;
                         Check(!(bool)Property(build, "Busy") && ((string)Property(build, "Status")).StartsWith("Randomized "), "whole-build roll finishes: " + Property(build, "Status"), log);
                         Check(slot.HeldObject == physical, "whole-build roll retains the original receiver", log);
+                        var skinDefinitions = (IDictionary)AccessTools.Field(manager, "ModularWorkshopSkinsDictionary").GetValue(null);
+                        var backend = Property(targetObject, "GetModularFVRFireArm");
+                        string receiverPath = (string)Read(backend, "SkinPath");
+                        bool receiverHasChoices = ((IDictionary)Property(skinDefinitions[receiverPath], "SkinDictionary")).Count > 1;
+                        int eligibleSkins = receiverHasChoices ? 1 : 0;
+                        foreach (DictionaryEntry entry in (IDictionary)Property(targetObject, "AllAttachmentPoints"))
+                        {
+                            var p = entry.Value;
+                            if ((bool)Read(p, "IsPointDisabled") || (bool)Read(p, "DisallowTakeAndHoldRandomization")) continue;
+                            string path = entry.Key + "/" + Read(p, "SelectedModularWeaponPart");
+                            if (skinDefinitions.Contains(path) && ((IDictionary)Property(skinDefinitions[path], "SkinDictionary")).Count > 1) ++eligibleSkins;
+                        }
+                        Check((int)Property(build, "SkinsChanged") == eligibleSkins, "whole-build roll includes all eligible skins (" + eligibleSkins + ")", log);
+                        if (receiverHasChoices) Check((string)Read(backend, "CurrentSelectedReceiverSkinID") != receiverBefore, "whole-build roll chooses a different receiver skin", log);
                         Check((string)Read(excluded, "SelectedModularWeaponPart") == excludedSelection, "whole-build roll respects author-excluded point", log);
                         var selections = Selected(targetObject);
                         states.Add(string.Join(";", selections.OrderBy(p => p.Key).Select(p => p.Key + "=" + p.Value).ToArray()));
@@ -273,6 +305,7 @@ public static class WorkshopChecks
                 if (source.ItemID == "PMM9mm") Check(nested > 0, "build roll traversed real nested slots", log);
                 log("WORKSHOP BUILD " + source.ItemID + " distinct=" + states.Count + " maxNested=" + nested);
                 var savedSelections = Selected(targetObject);
+                var savedSkins = SkinSnapshot(targetObject);
                 var restored = Object.Instantiate(request.Result, platform.transform.position + Vector3.up * 2, Quaternion.identity);
                 created.Add(restored); yield return null;
                 restored.GetComponent<FVRPhysicalObject>().ConfigureFromFlagDic(physical.GetFlagDic());
@@ -280,6 +313,8 @@ public static class WorkshopChecks
                 var restoredTarget = restored.GetComponents<MonoBehaviour>().First(c => c != null && c.GetType().GetInterfaces().Any(t => t.FullName == "ModularWorkshop.IModularWeapon"));
                 var restoredSelections = Selected(restoredTarget);
                 Check(savedSelections.Count == restoredSelections.Count && savedSelections.All(p => restoredSelections.ContainsKey(p.Key) && restoredSelections[p.Key] == p.Value), "randomized build survives native save/load flags", log);
+                var restoredSkins = SkinSnapshot(restoredTarget);
+                Check(savedSkins.Count == restoredSkins.Count && savedSkins.All(p => restoredSkins.ContainsKey(p.Key) && restoredSkins[p.Key] == p.Value), "randomized skins survive native save/load flags", log);
                 Object.Destroy(restored);
                 Call(build, "Activate"); Call(build, "Activate"); yield return null; yield return null;
                 Check(!(bool)Property(build, "Busy") && ((string)Property(build, "Status")).Contains("cancelled"), "second activation cancels a pending build roll", log);
@@ -306,6 +341,45 @@ public static class WorkshopChecks
     {
         var control = menu.GetComponents<MonoBehaviour>().First(c => c.GetType().FullName == "Gundomizer.WorkshopSlotControl");
         return (MonoBehaviour)Read(control, "button");
+    }
+
+    private static Dictionary<string, string> SkinSnapshot(object target)
+    {
+        var result = new Dictionary<string, string>();
+        foreach (DictionaryEntry entry in (IDictionary)Property(target, "AllAttachmentPoints"))
+            if (!(bool)Read(entry.Value, "IsPointDisabled")) result.Add((string)entry.Key, (string)Property(entry.Value, "CurrentSkin"));
+        result.Add("receiver", (string)Read(Property(target, "GetModularFVRFireArm"), "CurrentSelectedReceiverSkinID"));
+        return result;
+    }
+
+    private static string SkinSelection(MonoBehaviour menu)
+    {
+        var target = Read(menu, "ModularWeapon");
+        if ((bool)Read(menu, "_receiverSkinMode")) return (string)Read(Property(target, "GetModularFVRFireArm"), "CurrentSelectedReceiverSkinID");
+        var points = (IDictionary)Property(target, "AllAttachmentPoints");
+        return (string)Property(points[(string)Read(menu, "ModularPartsGroupID")], "CurrentSkin");
+    }
+
+    private static IEnumerator SkinRollChecks(MonoBehaviour menu, string directory, string name, Action<string> log)
+    {
+        yield return new WaitForEndOfFrame();
+        CheckControl(menu, log);
+        var names = (string[])Read(menu, "_skinNames");
+        if (names.Distinct().Count() < 2)
+        { Check(!ControlButton(menu).GetComponent<Button>().interactable, "single-choice skin dice is disabled", log); yield break; }
+        var position = ControlButton(menu).transform.localPosition;
+        var target = Read(menu, "ModularWeapon"); var parts = Selected(target);
+        for (int i = 0; i < 4; ++i)
+        {
+            string before = SkinSelection(menu);
+            yield return new WaitForSecondsRealtime(.2f);
+            ControlButton(menu).GetComponent<Button>().onClick.Invoke(); yield return null;
+            string after = SkinSelection(menu);
+            Check(after != before && names.Contains(after), "skin dice selects a different native skin: " + name, log);
+            Check(Selected(target).All(p => parts.ContainsKey(p.Key) && parts[p.Key] == p.Value), "skin roll does not change parts", log);
+            Check(ControlButton(menu).transform.localPosition == position, "skin roll keeps dice position fixed", log);
+        }
+        yield return new WaitForEndOfFrame(); Capture(menu, Path.Combine(directory, name + "-skin-dice.png"));
     }
 
     private static void PlaceOnTable(ItemSpawnerV2 spawner, GameObject instance, Action<string> log)
@@ -351,7 +425,7 @@ public static class WorkshopChecks
     private static void WatchMenu(Camera camera, MonoBehaviour menu)
     {
         var panel = ((GameObject)Read(menu, "MainCanvas")).GetComponent<RectTransform>();
-        var bounds = RectTransformUtility.CalculateRelativeRectTransformBounds(panel);
+        var bounds = MenuBounds(panel, menu);
         camera.transform.rotation = panel.rotation;
         camera.transform.position = panel.TransformPoint(bounds.center) - panel.forward * 2;
         camera.orthographic = true;
@@ -379,14 +453,27 @@ public static class WorkshopChecks
         }
     }
 
+    private static Bounds MenuBounds(RectTransform panel, MonoBehaviour menu)
+    {
+        var bounds = RectTransformUtility.CalculateRelativeRectTransformBounds(panel);
+        var control = menu.GetComponents<MonoBehaviour>().FirstOrDefault(c => c.GetType().FullName == "Gundomizer.WorkshopSlotControl");
+        var button = control == null ? null : Read(control, "button") as MonoBehaviour;
+        if (button != null && button.gameObject.activeInHierarchy)
+        {
+            var corners = new Vector3[4]; ((RectTransform)button.transform).GetWorldCorners(corners);
+            foreach (var corner in corners) bounds.Encapsulate(panel.InverseTransformPoint(corner));
+        }
+        return bounds;
+    }
+
     private static void CheckControl(MonoBehaviour menu, Action<string> log)
     {
         var button = ControlButton(menu); var rect = (RectTransform)button.transform; var parent = rect.parent;
         Check(button.gameObject.activeInHierarchy, "native part menu has an active slot dice", log);
         var bounds = RectTransformUtility.CalculateRelativeRectTransformBounds(parent, rect);
-        foreach (string name in new[] { "HideButton", "ShowSkinsButton", "HideSkinsButton" })
+        foreach (string name in new[] { "HideButton", "ShowSkinsButton", "HideSkinsButton", "BackButton", "NextButton" })
         {
-            var obj = (GameObject)Read(menu, name); if (obj == null || !obj.activeInHierarchy) continue;
+            var obj = (GameObject)Read(menu, name); if (obj == null) continue;
             var native = RectTransformUtility.CalculateRelativeRectTransformBounds(parent, obj.transform);
             Check(bounds.max.y < native.min.y, "dice sits below active " + name, log);
         }
@@ -402,26 +489,29 @@ public static class WorkshopChecks
     {
         Canvas.ForceUpdateCanvases();
         var panel = ((GameObject)Read(menu, "MainCanvas")).GetComponent<RectTransform>();
-        var bounds = RectTransformUtility.CalculateRelativeRectTransformBounds(panel);
+        var bounds = MenuBounds(panel, menu);
         var cameraObject = new GameObject("Workshop capture camera");
         var camera = cameraObject.AddComponent<Camera>();
         var texture = new RenderTexture(1200, 900, 24);
         var pixels = new Texture2D(1200, 900, TextureFormat.RGB24, false);
         var previous = RenderTexture.active;
+        var layers = menu.GetComponentsInChildren<Transform>(true).ToDictionary(t => t.gameObject, t => t.gameObject.layer);
         try
         {
+            foreach (var obj in layers.Keys) obj.layer = 31;
             camera.transform.rotation = panel.rotation;
             camera.transform.position = panel.TransformPoint(bounds.center) - panel.forward * 2;
             camera.orthographic = true;
             camera.orthographicSize = Mathf.Max(bounds.size.y * Mathf.Abs(panel.lossyScale.y), bounds.size.x * Mathf.Abs(panel.lossyScale.x) * .75f) * .55f;
             camera.nearClipPlane = .01f; camera.farClipPlane = 4;
             camera.clearFlags = CameraClearFlags.SolidColor; camera.backgroundColor = new Color(.04f, .04f, .04f);
-            camera.cullingMask = 1 << panel.GetComponentInParent<Canvas>().gameObject.layer;
+            camera.cullingMask = 1 << 31;
             camera.targetTexture = texture; camera.Render(); RenderTexture.active = texture;
             pixels.ReadPixels(new Rect(0, 0, 1200, 900), 0, 0); pixels.Apply(); File.WriteAllBytes(path, pixels.EncodeToPNG());
         }
         finally
         {
+            foreach (var entry in layers) if (entry.Key != null) entry.Key.layer = entry.Value;
             RenderTexture.active = previous; camera.targetTexture = null;
             Object.Destroy(cameraObject); Object.Destroy(texture); Object.Destroy(pixels);
         }

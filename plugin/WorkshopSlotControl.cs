@@ -15,11 +15,12 @@ namespace Gundomizer
         private bool ready;
         private string status;
         private float statusUntil;
+        private Bounds? reservedLayout;
 
         internal void Refresh(MonoBehaviour source)
         {
             menu = source;
-            bool visible = (bool)Read("_isShowingUI") && !(bool)Read("_isShowingSkins");
+            bool visible = (bool)Read("_isShowingUI");
             if (!visible) { if (button != null) button.gameObject.SetActive(false); if (tooltip != null) tooltip.gameObject.SetActive(false); return; }
             var template = (GameObject)Read("HideButton");
             var nativeButton = template == null ? null : template.GetComponent<FVRPointableButton>();
@@ -33,7 +34,8 @@ namespace Gundomizer
                 button.Ready = () => ready && menu != null && button.gameObject.activeInHierarchy && !ModularWorkshopBridge.IsBusy(menu);
                 button.Handler = hand =>
                 {
-                    ModularWorkshopBridge.TryRandomizeSlot(menu, out status);
+                    if ((bool)Read("_isShowingSkins")) ModularWorkshopBridge.TryRandomizeSkin(menu, out status);
+                    else ModularWorkshopBridge.TryRandomizeSlot(menu, out status);
                     statusUntil = Time.unscaledTime + 2;
                     Refresh(menu);
                 };
@@ -49,22 +51,29 @@ namespace Gundomizer
                 tooltip.resizeTextForBestFit = true;
                 tooltip.alignment = TextAnchor.MiddleCenter; tooltip.color = Color.white; tooltip.raycastTarget = false;
             }
-            var bounds = RectTransformUtility.CalculateRelativeRectTransformBounds(parent, template.transform);
-            float size = bounds.size.x, bottom = bounds.min.y;
-            foreach (string field in new[] { "ShowSkinsButton", "HideSkinsButton" })
+            if (!reservedLayout.HasValue)
             {
-                var obj = (GameObject)Read(field);
-                if (obj != null && obj.activeInHierarchy)
-                    bottom = Mathf.Min(bottom, RectTransformUtility.CalculateRelativeRectTransformBounds(parent, obj.transform).min.y);
+                var bounds = ReservedBounds(parent, template);
+                float bottom = bounds.min.y;
+                // Reserve hidden controls too: skins and pagination must not move the dice.
+                foreach (string field in new[] { "ShowSkinsButton", "HideSkinsButton", "BackButton", "NextButton" })
+                {
+                    var obj = (GameObject)Read(field);
+                    if (obj != null) bottom = Mathf.Min(bottom, ReservedBounds(parent, obj).min.y);
+                }
+                foreach (var obj in (GameObject[])Read("PartButtons"))
+                    if (obj != null) bottom = Mathf.Min(bottom, ReservedBounds(parent, obj).min.y);
+                reservedLayout = new Bounds(new Vector3(bounds.center.x, bottom, template.transform.localPosition.z), bounds.size);
             }
+            float size = reservedLayout.Value.size.x;
             var rect = (RectTransform)button.transform;
             float oldHeight = rect.rect.height, oldWidth = rect.rect.width;
             rect.sizeDelta = new Vector2(size / Mathf.Abs(rect.localScale.x), size / Mathf.Abs(rect.localScale.y));
-            rect.localPosition = new Vector3(bounds.center.x, bottom - size * .65f, template.transform.localPosition.z);
+            rect.localPosition = reservedLayout.Value.center + Vector3.down * size * .65f;
             var collider = button.GetComponent<BoxCollider>();
             if (collider != null) collider.size = new Vector3(collider.size.x * rect.rect.width / oldWidth,
                 collider.size.y * rect.rect.height / oldHeight, collider.size.z);
-            ready = ModularWorkshopBridge.CanRandomizeSlot(menu);
+            ready = (bool)Read("_isShowingSkins") ? ModularWorkshopBridge.CanRandomizeSkin(menu) : ModularWorkshopBridge.CanRandomizeSlot(menu);
             button.gameObject.SetActive(true);
             var tipRect = (RectTransform)tooltip.transform.parent;
             tipRect.anchorMin = tipRect.anchorMax = new Vector2(.5f, .5f); tipRect.pivot = new Vector2(1, .5f);
@@ -77,13 +86,24 @@ namespace Gundomizer
         }
 
         private object Read(string name) => ModularWorkshopBridge.Read(menu, name);
+        private static Bounds ReservedBounds(RectTransform parent, GameObject control)
+        {
+            var bounds = new Bounds(parent.InverseTransformPoint(control.transform.position), Vector3.zero);
+            var corners = new Vector3[4];
+            foreach (var rect in control.GetComponentsInChildren<RectTransform>(true))
+            {
+                rect.GetWorldCorners(corners);
+                foreach (var corner in corners) bounds.Encapsulate(parent.InverseTransformPoint(corner));
+            }
+            return bounds;
+        }
         private void LateUpdate()
         {
             if (tooltip == null || button == null) return;
             bool show = button.gameObject.activeInHierarchy && button.Hovered;
             tooltip.transform.parent.gameObject.SetActive(show);
             if (show) tooltip.text = Time.unscaledTime < statusUntil ? status
-                : "Randomize " + (((Text)Read("DisplayNameText"))?.text ?? (string)Read("ModularPartsGroupID"));
+                : "Randomize " + (((Text)Read("DisplayNameText"))?.text ?? (string)Read("ModularPartsGroupID")) + ((bool)Read("_isShowingSkins") ? " skin" : " part");
         }
         private void OnDestroy()
         {

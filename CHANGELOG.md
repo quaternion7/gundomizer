@@ -2,9 +2,9 @@
 
 ## Unreleased
 
-Add optional Modular Workshop dice buttons beneath each part menu's Hide UI / Skins controls. Each button rerolls only its own slot through the framework's native weighted pool and manual selection action.
+Add optional Modular Workshop dice buttons fixed below part/skin menus, clear of paging arrows. Individual rolls exclude the current choice while preserving authored part weights.
 
-Add a compact rainbow build dice beside the workshop platform cog. Reroll the docked weapon's parts, including newly available nested slots, while keeping its receiver. Click again to cancel; undocking cancels automatically.
+Add a compact rainbow build dice beside the workshop platform cog. Reroll parts and skins, including nested slots and the receiver skin, through native menus. Click again to cancel; undocking cancels automatically.
 
 ## 1.1.0
 

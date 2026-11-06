@@ -1,5 +1,7 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using HarmonyLib;
 using UnityEngine;
@@ -46,7 +48,6 @@ namespace Gundomizer
         {
             try
             {
-                if ((bool)Read(__instance, "_skinOnlyMode")) return;
                 var control = __instance.GetComponent<WorkshopSlotControl>() ?? __instance.gameObject.AddComponent<WorkshopSlotControl>();
                 control.Refresh(__instance);
             }
@@ -77,7 +78,15 @@ namespace Gundomizer
                 object definition;
                 if (!TryDefinition(menu, out definition, out message)) return false;
                 var type = menu.GetType();
-                string selected = (string)AccessTools.Method(definition.GetType(), "GetRandomPart").Invoke(definition, null);
+                string selected;
+                if (wholeBuild) selected = (string)AccessTools.Method(definition.GetType(), "GetRandomPart").Invoke(definition, null);
+                else
+                {
+                    var pool = (IList<string>)AccessTools.Property(definition.GetType(), "TakeAndHoldSpawnPool").GetValue(definition, null);
+                    int choice = SelectionPolicy.AlternativeIndex(pool, CurrentPoint(menu), n => UnityEngine.Random.Range(0, n));
+                    if (choice < 0) { message = "No other parts available for this slot."; return false; }
+                    selected = pool[choice];
+                }
 
                 // The normal menu action applies only this slot. In particular, do not use
                 // isRandomized=true: that also randomizes nested parts and skins in MW.
@@ -123,7 +132,89 @@ namespace Gundomizer
             definition = groups[group];
             var pool = (IList)AccessTools.Property(definition.GetType(), "TakeAndHoldSpawnPool").GetValue(definition, null);
             if (pool.Count == 0) { message = "No parts in this slot's randomization pool."; return false; }
+            if (!wholeBuild && !pool.Cast<string>().Any(id => id != (string)Read(point, "SelectedModularWeaponPart")))
+            { message = "No other parts available for this slot."; return false; }
             return true;
+        }
+
+        private static object Point(MonoBehaviour menu)
+        {
+            object target = Read(menu, "ModularWeapon") ?? Read(menu, "ModularPhysicalObject");
+            if (target == null) return null;
+            var points = (IDictionary)AccessTools.Property(target.GetType(), "AllAttachmentPoints").GetValue(target, null);
+            return points[(string)Read(menu, "ModularPartsGroupID")];
+        }
+
+        private static string CurrentPoint(MonoBehaviour menu) => (string)Read(Point(menu), "SelectedModularWeaponPart");
+
+        internal static bool CanRandomizeSkin(MonoBehaviour menu, bool wholeBuild = false)
+        {
+            string[] names; string current;
+            try { return SkinChoices(menu, wholeBuild, out names, out current) && names.Any(n => n != current); }
+            catch { return false; }
+        }
+
+        private static bool SkinChoices(MonoBehaviour menu, bool wholeBuild, out string[] names, out string current)
+        {
+            names = null; current = null;
+            if (menu == null) return false;
+            string path;
+            if ((bool)Read(menu, "_receiverSkinMode"))
+            {
+                var target = (bool)Read(menu, "_receiverSkinSystemMode") ? Read(menu, "SkinSystem") : Read(menu, "ModularPhysicalObject");
+                var weapon = Read(menu, "ModularWeapon");
+                if (weapon != null) target = AccessTools.Property(weapon.GetType(), "GetModularFVRFireArm").GetValue(weapon, null);
+                if (target == null) return false;
+                path = (string)Read(target, "SkinPath"); current = (string)Read(target, "CurrentSelectedReceiverSkinID");
+            }
+            else
+            {
+                var point = Point(menu);
+                if (point == null || (bool)Read(point, "IsPointDisabled") || (wholeBuild && (bool)Read(point, "DisallowTakeAndHoldRandomization"))) return false;
+                path = (string)Read(menu, "ModularPartsGroupID") + "/" + Read(point, "SelectedModularWeaponPart");
+                current = (string)AccessTools.Property(point.GetType(), "CurrentSkin").GetValue(point, null);
+            }
+            var manager = menu.GetType().Assembly.GetType("ModularWorkshop.ModularWorkshopManager", true);
+            var definitions = (IDictionary)AccessTools.Field(manager, "ModularWorkshopSkinsDictionary").GetValue(null);
+            if (!definitions.Contains(path)) return false;
+            var skins = (IDictionary)AccessTools.Property(definitions[path].GetType(), "SkinDictionary").GetValue(definitions[path], null);
+            names = skins.Keys.Cast<string>().ToArray();
+            return names.Length > 0;
+        }
+
+        internal static bool TryRandomizeSkin(MonoBehaviour menu, out string message) => RandomizeSkin(menu, false, out message);
+        internal static bool TryRandomizeBuildSkin(MonoBehaviour menu, out string message) => RandomizeSkin(menu, true, out message);
+
+        private static bool RandomizeSkin(MonoBehaviour menu, bool wholeBuild, out string message)
+        {
+            message = "No other skins available.";
+            try
+            {
+                if (!wholeBuild && IsBusy(menu)) { message = "Build randomization is in progress."; return false; }
+                string[] names; string current;
+                if (!SkinChoices(menu, wholeBuild, out names, out current)) return false;
+                int choice = SelectionPolicy.AlternativeIndex(names, current, n => UnityEngine.Random.Range(0, n));
+                if (choice < 0) return false;
+                bool wasShowingSkins = (bool)Read(menu, "_isShowingSkins");
+                try
+                {
+                    if (!wasShowingSkins) AccessTools.Method(menu.GetType(), "PButton_ShowSkins").Invoke(menu, null);
+                    int index = Array.IndexOf((string[])Read(menu, "_skinNames"), names[choice]);
+                    int size = ((GameObject[])Read(menu, "PartButtons")).Length;
+                    if (index < 0 || size == 0) return false;
+                    AccessTools.Field(menu.GetType(), "_skinPageIndex").SetValue(menu, index / size);
+                    AccessTools.Method(menu.GetType(), "PButton_Select").Invoke(menu, new object[] { index % size });
+                    message = "Selected skin " + names[choice] + ".";
+                    return true;
+                }
+                finally { if (!wasShowingSkins && menu != null) AccessTools.Method(menu.GetType(), "PButton_HideSkins").Invoke(menu, null); }
+            }
+            catch (Exception ex)
+            {
+                Plugin.Log.LogWarning("Modular skin roll failed: " + ex);
+                message = "Could not complete the skin change. Check logs.";
+                return false;
+            }
         }
 
         internal static object Read(object target, string name) => AccessTools.Field(target.GetType(), name).GetValue(target);

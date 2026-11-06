@@ -14,6 +14,16 @@ static class Program
 
     static void Main(string[] args)
     {
+        var weightedParts = new[] { "current", "current", "light", "heavy", "heavy" };
+        var alternatives = new List<string>();
+        for (int ticket = 0; ticket < 3; ++ticket)
+            alternatives.Add(weightedParts[SelectionPolicy.AlternativeIndex(weightedParts, "current", n => { Check(n == 3, "alternative draw excludes all current-part tickets"); return ticket; })]);
+        Check(string.Join(",", alternatives) == "light,heavy,heavy", "alternative rolls retain authored relative weights");
+        Check(weightedParts[0] == "current" && weightedParts.Length == 5, "alternative rolls do not mutate shared pools");
+        Check(SelectionPolicy.AlternativeIndex(new[] { "only", "only" }, "only", n => { throw new Exception("must not draw an empty pool"); }) == -1,
+            "a single distinct choice stops without retrying");
+        Check(SelectionPolicy.AlternativeIndex(new string[0], "missing", n => 0) == -1, "empty alternative pools are safe");
+        Check(SelectionPolicy.AlternativeIndex(new[] { "allowed" }, "excluded", n => 0) == 0, "a current choice outside the authored pool leaves eligible alternatives intact");
         var compatible = new CompatibleSelection();
         Check(!compatible.AllItems && compatible.Includes(CompatibilityKind.Magazine, 7), "compatible choices default to current scope with all connectors enabled");
         compatible.Set(CompatibilityKind.Magazine, 7, false);

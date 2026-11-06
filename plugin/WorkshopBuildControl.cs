@@ -24,6 +24,7 @@ namespace Gundomizer
         internal bool Busy { get; private set; }
         internal string Status { get; private set; }
         internal int Changed { get; private set; }
+        internal int SkinsChanged { get; private set; }
 
         internal void Refresh(MonoBehaviour source)
         {
@@ -113,7 +114,7 @@ namespace Gundomizer
         {
             if (Busy) { cancel = true; return; }
             if (slot == null || slot.HeldObject == null || !HasModularTarget()) return;
-            cancel = false; Busy = true; Changed = 0;
+            cancel = false; Busy = true; Changed = 0; SkinsChanged = 0;
             Status = "Randomizing build… Click again to cancel.";
             roll = StartCoroutine(Randomize(slot.HeldObject));
         }
@@ -131,29 +132,35 @@ namespace Gundomizer
             // Track point instances, rather than menu objects: swapping a parent can replace
             // both the child point and its menu. Re-read the native graph after every change.
             var visited = new HashSet<object>();
+            var skinned = new HashSet<MonoBehaviour>();
+            bool skins = false;
             try
             {
                 yield return null;
                 while (!cancel && slot != null && slot.HeldObject == original && original != null)
                 {
                     MonoBehaviour next;
-                    object point;
-                    try { next = Next(visited, out point); }
+                    object point = null;
+                    try
+                    {
+                        next = skins ? NextSkin(skinned) : Next(visited, out point);
+                        if (next == null && !skins) { skins = true; next = NextSkin(skinned); }
+                    }
                     catch (Exception ex)
                     {
                         Plugin.Log.LogWarning("Could not inspect modular build: " + ex);
                         Status = "Could not inspect this build. Check logs.";
                         yield break;
                     }
-                    if (next == null) { Status = "Randomized " + Changed + " slots."; yield break; }
+                    if (next == null) { Status = "Randomized " + Changed + " parts and " + SkinsChanged + " skins."; yield break; }
                     // Bound repeated changes across snapshots of an unusual author graph.
-                    if (visited.Count >= 256) { Status = "Build has too many changing slots. Roll stopped."; yield break; }
-                    visited.Add(point);
+                    if (visited.Count + skinned.Count >= 512) { Status = "Build has too many changing slots. Roll stopped."; yield break; }
+                    if (skins) skinned.Add(next); else visited.Add(point);
                     string message;
-                    if (!ModularWorkshopBridge.TryRandomizeBuildSlot(next, out message))
+                    if (!(skins ? ModularWorkshopBridge.TryRandomizeBuildSkin(next, out message) : ModularWorkshopBridge.TryRandomizeBuildSlot(next, out message)))
                     { Status = message; yield break; }
-                    ++Changed;
-                    Status = "Randomizing build… " + Changed + " slots. Click again to cancel.";
+                    if (skins) ++SkinsChanged; else ++Changed;
+                    Status = "Randomizing build… " + Changed + " parts, " + SkinsChanged + " skins. Click again to cancel.";
                     // Native destruction/menu creation settles before the next graph snapshot.
                     yield return null;
                 }
@@ -188,6 +195,18 @@ namespace Gundomizer
                 if (depth < nearest) { nearest = depth; result = menu; selectedPoint = point; }
             }
             return result;
+        }
+
+        private MonoBehaviour NextSkin(HashSet<MonoBehaviour> skinned)
+        {
+            var screens = (IDictionary)ModularWorkshopBridge.Read(platform, "_UIScreens");
+            foreach (GameObject screen in screens.Values)
+            {
+                if (screen == null) continue;
+                var menu = screen.GetComponent(platform.GetType().Assembly.GetType("ModularWorkshop.ModularWorkshopUI")) as MonoBehaviour;
+                if (menu != null && !skinned.Contains(menu) && ModularWorkshopBridge.CanRandomizeSkin(menu, true)) return menu;
+            }
+            return null;
         }
 
         private void OnDisable()

@@ -6,6 +6,18 @@ namespace Gundomizer
     // No Unity dependencies: section scope and random traversal can be verified outside VR.
     internal static class SelectionPolicy
     {
+        // Keep authored duplicate tickets (weights), but never retry into the current choice.
+        internal static int AlternativeIndex<T>(IList<T> pool, T current, Func<int, int> draw)
+        {
+            var comparer = EqualityComparer<T>.Default;
+            int count = 0;
+            foreach (var item in pool) if (!comparer.Equals(item, current)) ++count;
+            if (count == 0) return -1;
+            int ticket = draw(count);
+            for (int i = 0; i < pool.Count; ++i)
+                if (!comparer.Equals(pool[i], current) && ticket-- == 0) return i;
+            throw new ArgumentOutOfRangeException(nameof(draw));
+        }
         internal static List<string> SectionIds(bool categoryOverview,
             IEnumerable<string> pageIds, IEnumerable<string> filteredIds)
         {
