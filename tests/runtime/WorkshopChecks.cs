@@ -53,6 +53,11 @@ public static class WorkshopChecks
                 created.Add(instance);
                 foreach (var rb in instance.GetComponentsInChildren<Rigidbody>()) rb.isKinematic = true;
                 platform = (MonoBehaviour)instance.GetComponentInChildren(mw.GetType("ModularWorkshop.ModularWorkshopPlatform"), true);
+                if (File.Exists(Path.Combine(directory, "workshop-placement-mode.txt")))
+                {
+                    yield return null;
+                    PlaceOnTable(spawner, instance, log);
+                }
                 break;
             }
             Check(platform != null, "real workshop platform spawned", log);
@@ -84,6 +89,20 @@ public static class WorkshopChecks
                     var dice = (MonoBehaviour)Read(buildControl, "button");
                     var editor = spectatorObject.AddComponent<WorkshopPlacementEditor>();
                     editor.Setup(dice.transform.parent, spectator, directory, log);
+                    var geo = platform.GetComponentInParent<FVRPhysicalObject>().GetComponentsInChildren<MeshRenderer>().First(r => r.name == "Geo");
+                    var front = ViewerFront(spawner);
+                    log("PLACEMENT CAMERA center=" + geo.bounds.center.ToString("F4") + " front=" + front + " spawnerForward=" + spawner.transform.forward);
+                    editor.FramePlatform(geo.bounds.center + Vector3.up * .04f, front);
+                    yield return null;
+                    var beforeOrbit = spectator.transform.rotation;
+                    editor.ProcessCameraEvent(new Event { type = EventType.MouseDown, button = 1, mousePosition = new Vector2(800, 350) }, 0);
+                    editor.ProcessCameraEvent(new Event { type = EventType.MouseDrag, button = 1, delta = new Vector2(60, 20) }, 0);
+                    editor.ProcessCameraEvent(new Event { type = EventType.MouseUp, button = 1 }, 0);
+                    yield return null;
+                    Check(Quaternion.Angle(beforeOrbit, spectator.transform.rotation) > 10, "placement camera responds to mouse drag events without game input axes", log);
+                    editor.FramePlatform(geo.bounds.center + Vector3.up * .04f, front);
+                    yield return new WaitForEndOfFrame();
+                    Application.CaptureScreenshot(Path.Combine(directory, "placement-editor-screen.png"));
                     log("PLACEMENT EDITOR READY — move/rotate the rainbow build control; edits autosave locally.");
                     while (!File.Exists(Path.Combine(directory, "workshop-placement-finish.txt"))) yield return null;
                     yield break;
@@ -248,6 +267,36 @@ public static class WorkshopChecks
         var control = menu.GetComponents<MonoBehaviour>().First(c => c.GetType().FullName == "Gundomizer.WorkshopSlotControl");
         return (MonoBehaviour)Read(control, "button");
     }
+
+    private static void PlaceOnTable(ItemSpawnerV2 spawner, GameObject instance, Action<string> log)
+    {
+        var pad = spawner.SpawnPoint_Large;
+        var geo = instance.GetComponentsInChildren<MeshFilter>().First(f => f.name == "Geo");
+        var size = geo.sharedMesh.bounds.size;
+        var normal = geo.transform.TransformDirection(size.x < size.y && size.x < size.z ? Vector3.right : size.y < size.z ? Vector3.up : Vector3.forward);
+        var cog = instance.GetComponentsInChildren<MonoBehaviour>(true).First(c => c != null && c.GetType().FullName == "AndrewFTW.SimpleSwitch");
+        var dock = instance.GetComponentInChildren<FVRQuickBeltSlot>(true);
+        if (Vector3.Dot(normal, dock.PoseOverride.position - geo.GetComponent<Renderer>().bounds.center) < 0) normal = -normal;
+        instance.transform.rotation = Quaternion.FromToRotation(normal, Vector3.up) * instance.transform.rotation;
+        var facing = Vector3.ProjectOnPlane(cog.transform.position - geo.GetComponent<Renderer>().bounds.center, Vector3.up).normalized;
+        var front = ViewerFront(spawner);
+        if (facing.sqrMagnitude > .01f)
+            instance.transform.rotation = Quaternion.AngleAxis(Mathf.Atan2(Vector3.Cross(facing, front).y, Vector3.Dot(facing, front)) * Mathf.Rad2Deg, Vector3.up) * instance.transform.rotation;
+        var hits = Physics.RaycastAll(new Ray(pad.position + Vector3.up, Vector3.down), 3);
+        var surface = hits.Where(h => h.normal.y > .9f && !h.collider.isTrigger && !h.collider.transform.IsChildOf(instance.transform)
+            && h.collider.GetComponentInParent<FVRPhysicalObject>() == null && Mathf.Abs(h.point.y - pad.position.y) < .6f)
+            .OrderBy(h => h.distance).ToArray();
+        Check(surface.Length > 0, "found native spawner table surface beneath large spawn pad", log);
+        var bounds = geo.GetComponent<Renderer>().bounds;
+        instance.transform.position += new Vector3(pad.position.x - bounds.center.x, surface[0].point.y + .005f - bounds.min.y, pad.position.z - bounds.center.z);
+        var upright = geo.transform.TransformDirection(size.x < size.y && size.x < size.z ? Vector3.right : size.y < size.z ? Vector3.up : Vector3.forward);
+        Check(Mathf.Abs(Vector3.Dot(upright, Vector3.up)) > .999f, "platform base is horizontal in world space", log);
+        Check(dock.PoseOverride.position.y > geo.GetComponent<Renderer>().bounds.max.y, "weapon dock is above the platform top", log);
+        log("PLACEMENT TABLE " + surface[0].collider.name + " top=" + surface[0].point.y + " platformBottom=" + geo.GetComponent<Renderer>().bounds.min.y);
+    }
+
+    private static Vector3 ViewerFront(ItemSpawnerV2 spawner)
+        => -Vector3.ProjectOnPlane(spawner.MainMenuCanvases[0].transform.forward, Vector3.up).normalized;
 
     private static void Watch(Camera camera, MonoBehaviour platform, GameObject weapon, MonoBehaviour menu)
     {

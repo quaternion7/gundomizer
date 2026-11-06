@@ -11,11 +11,12 @@ public sealed class WorkshopPlacementEditor : MonoBehaviour
     private Action<string> log;
     private Vector3 initialPosition, initialScale, center;
     private Quaternion initialRotation;
-    private Rect window = new Rect(10, 10, 320, 540);
+    private Rect window = new Rect(10, 10, 320, 660);
     private int mode, dragAxis = -1;
     private Vector2 lastMouse;
-    private float yaw, pitch, distance = .55f, nextSave;
+    private float yaw, pitch, frontYaw, distance = .55f, nextSave;
     private string lastSnapshot;
+    private bool orbiting;
     private static readonly Color[] Colors = { new Color(1, .3f, .3f), new Color(.3f, 1, .3f), new Color(.3f, .6f, 1) };
 
     [Serializable]
@@ -30,6 +31,12 @@ public sealed class WorkshopPlacementEditor : MonoBehaviour
     {
         target = edited; view = camera; directory = path; log = logger;
         initialPosition = target.localPosition; initialRotation = target.localRotation; initialScale = target.localScale;
+        var savedPath = Path.Combine(directory, "workshop-placement.json");
+        if (File.Exists(savedPath))
+        {
+            var saved = JsonUtility.FromJson<Placement>(File.ReadAllText(savedPath));
+            target.localPosition = saved.localPosition; target.localRotation = saved.localRotation; target.localScale = saved.localScale;
+        }
         center = target.position + Vector3.up * .035f;
         yaw = view.transform.eulerAngles.y; pitch = Signed(view.transform.eulerAngles.x);
         view.orthographic = false; view.fieldOfView = 45;
@@ -40,8 +47,6 @@ public sealed class WorkshopPlacementEditor : MonoBehaviour
     {
         if (target == null) return;
         Cursor.lockState = CursorLockMode.None; Cursor.visible = true;
-        if (Input.GetMouseButton(1)) { yaw += Input.GetAxis("Mouse X") * 3; pitch -= Input.GetAxis("Mouse Y") * 3; }
-        distance = Mathf.Clamp(distance * (1 - Input.GetAxis("Mouse ScrollWheel") * .5f), .12f, 2);
         view.transform.rotation = Quaternion.Euler(pitch, yaw, 0);
         view.transform.position = center - view.transform.forward * distance;
         if (Time.unscaledTime >= nextSave) { nextSave = Time.unscaledTime + .25f; Save(); }
@@ -51,13 +56,14 @@ public sealed class WorkshopPlacementEditor : MonoBehaviour
     {
         if (target == null) return;
         GUI.depth = -1000;
+        ProcessCameraEvent(Event.current, GUIUtility.GetControlID(4720, FocusType.Passive));
         window = GUI.Window(4719, window, DrawWindow, "Gundomizer — live placement (test only)");
         DrawHandles();
     }
 
     private void DrawWindow(int id)
     {
-        GUILayout.Label("Drag the colored handles.\nRight-drag: orbit camera  |  Wheel: zoom");
+        GUILayout.Label("Drag the colored handles.\nRight-drag outside panel: orbit | Wheel: zoom");
         mode = GUILayout.Toolbar(mode, new[] { "Move", "Rotate" });
         GUILayout.Space(6);
         GUILayout.Label("Position offset (cm, parent axes)");
@@ -81,10 +87,47 @@ public sealed class WorkshopPlacementEditor : MonoBehaviour
         if (GUILayout.Button("Save placement")) { Save(); log("PLACEMENT SAVED " + lastSnapshot); }
         if (GUILayout.Button("Reset placement")) { target.localPosition = initialPosition; target.localRotation = initialRotation; target.localScale = initialScale; }
         GUILayout.BeginHorizontal();
-        if (GUILayout.Button("View front")) { pitch = 20; yaw = 90; }
-        if (GUILayout.Button("View above")) { pitch = 65; yaw = 90; }
+        if (GUILayout.Button("View front")) { pitch = 20; yaw = frontYaw; }
+        if (GUILayout.Button("View above")) { pitch = 65; yaw = frontYaw; }
         GUILayout.EndHorizontal();
+        GUILayout.Label("Camera orbit (also available without dragging)");
+        GUILayout.Label("Yaw"); yaw = GUILayout.HorizontalSlider(yaw, -180, 180);
+        GUILayout.Label("Pitch"); pitch = GUILayout.HorizontalSlider(pitch, -80, 85);
+        GUILayout.Label("Zoom"); distance = GUILayout.HorizontalSlider(distance, .12f, 2);
         GUI.DragWindow(new Rect(0, 0, window.width, 22));
+    }
+
+    // Unity's IMGUI mouse deltas work even when a game's InputManager has no Mouse X/Y axes.
+    public void ProcessCameraEvent(Event e, int controlId)
+    {
+        if (e.type == EventType.MouseDown && e.button == 1 && !window.Contains(e.mousePosition))
+        {
+            orbiting = true;
+            if (controlId != 0) GUIUtility.hotControl = controlId;
+            e.Use();
+        }
+        else if (e.type == EventType.MouseDrag && e.button == 1 && orbiting)
+        {
+            yaw = Signed(yaw + e.delta.x * .35f);
+            pitch = Mathf.Clamp(pitch + e.delta.y * .35f, -80, 85);
+            e.Use();
+        }
+        else if (e.type == EventType.MouseUp && e.button == 1 && orbiting)
+        {
+            orbiting = false;
+            if (controlId != 0) GUIUtility.hotControl = 0;
+            e.Use();
+        }
+        else if (e.type == EventType.ScrollWheel && !window.Contains(e.mousePosition))
+        {
+            distance = Mathf.Clamp(distance * Mathf.Exp(e.delta.y * .08f), .12f, 2); e.Use();
+        }
+    }
+
+    public void FramePlatform(Vector3 point, Vector3 front)
+    {
+        center = point; pitch = 30; distance = .65f;
+        yaw = frontYaw = Signed(Mathf.Atan2(-front.x, -front.z) * Mathf.Rad2Deg);
     }
 
     private static Vector3 Sliders(Vector3 value, float min, float max)
