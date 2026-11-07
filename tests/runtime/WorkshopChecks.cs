@@ -165,6 +165,11 @@ public static class WorkshopChecks
                         ControlButton(menu).GetComponent<Button>().onClick.Invoke();
                         string status = (string)Read(menu.GetComponent(controller.GetType().Assembly.GetType("Gundomizer.WorkshopSlotControl")), "status");
                         Check(string.IsNullOrEmpty(status), source.ItemID + " dice click " + i + " has no success notification: " + status, log);
+                        Call(ControlButton(menu), "OnPointerEnter", new object[] { null });
+                        yield return new WaitForEndOfFrame();
+                        var slotControl = menu.GetComponent(controller.GetType().Assembly.GetType("Gundomizer.WorkshopSlotControl"));
+                        Check(((Text)Read(slotControl, "tooltip")).text.StartsWith("Randomize "), "successful part roll returns to normal hover text", log);
+                        Call(ControlButton(menu), "OnPointerExit", new object[] { null });
                         yield return null;
                         var after = Selected(target); chosen.Add(after[group]);
                         Check(after[group] != previousPart, "individual roll never reselects the current part", log);
@@ -274,6 +279,9 @@ public static class WorkshopChecks
                         while ((bool)Property(build, "Busy") && Time.realtimeSinceStartup < finish) yield return null;
                         Check(!(bool)Property(build, "Busy") && string.IsNullOrEmpty((string)Property(build, "Status")),
                             "whole-build roll finishes without a success summary: " + Property(build, "Status"), log);
+                        Call(buildButton, "OnPointerEnter", new object[] { null }); yield return new WaitForEndOfFrame();
+                        Check(((Text)Read(build, "tooltip")).text == "Randomize build", "completed build hover has no part or skin counts", log);
+                        Call(buildButton, "OnPointerExit", new object[] { null });
                         Check(slot.HeldObject == physical, "whole-build roll retains the original receiver", log);
                         var skinDefinitions = (IDictionary)AccessTools.Field(manager, "ModularWorkshopSkinsDictionary").GetValue(null);
                         var backend = Property(targetObject, "GetModularFVRFireArm");
@@ -379,6 +387,12 @@ public static class WorkshopChecks
             Check(after != before && names.Contains(after), "skin dice selects a different native skin: " + name, log);
             Check(Selected(target).All(p => parts.ContainsKey(p.Key) && parts[p.Key] == p.Value), "skin roll does not change parts", log);
             Check(ControlButton(menu).transform.localPosition == position, "skin roll keeps dice position fixed", log);
+            var control = menu.GetComponents<MonoBehaviour>().First(c => c.GetType().FullName == "Gundomizer.WorkshopSlotControl");
+            Check(string.IsNullOrEmpty((string)Read(control, "status")), "skin roll has no success notification", log);
+            Call(ControlButton(menu), "OnPointerEnter", new object[] { null }); yield return new WaitForEndOfFrame();
+            Check(((Text)Read(control, "tooltip")).text.StartsWith("Randomize ") && ((Text)Read(control, "tooltip")).text.EndsWith(" skin"),
+                "successful skin roll returns to normal hover text", log);
+            Call(ControlButton(menu), "OnPointerExit", new object[] { null });
         }
         yield return new WaitForEndOfFrame(); Capture(menu, Path.Combine(directory, name + "-skin-dice.png"));
     }

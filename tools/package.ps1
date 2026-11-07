@@ -24,7 +24,9 @@ foreach ($file in @('manifest.json','README.md','CHANGELOG.md','icon.png')) {
 }
 $images = Join-Path $stage 'docs\images'
 New-Item -ItemType Directory -Path $images -Force | Out-Null
-Copy-Item -LiteralPath (Join-Path $repoRoot 'docs\images\item-spawner.png') -Destination $images
+foreach ($image in @('item-spawner.png', 'modular-workshop.png')) {
+    Copy-Item -LiteralPath (Join-Path $repoRoot ('docs\images\' + $image)) -Destination $images
+}
 Copy-Item -LiteralPath $dll -Destination $stage
 Copy-Item -LiteralPath (Join-Path (Split-Path $dll) 'AssetsTools.NET.dll') -Destination $stage
 Copy-Item -LiteralPath (Join-Path $repoRoot 'THIRD-PARTY-NOTICES.md') -Destination $stage

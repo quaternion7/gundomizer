@@ -114,6 +114,15 @@ public static class CompatiblePanelChecks
                 Check(string.IsNullOrEmpty(status), "successful global roll has no success notification", log);
                 var added = Object.FindObjectsOfType<FVRFireArmMagazine>().Where(m => !before.Contains(m.GetInstanceID())).ToArray();
                 Check(added.Length == (spawn ? 1 : 0), "roll creates exactly the expected number of magazines", log);
+                var rolled = (ItemSpawnerID)AccessTools.Method(assembly.GetType("Gundomizer.OtherLoaderBridge"), "Resolve")
+                    .Invoke(null, new object[] { Get<string>(spawner, "m_selectedID") });
+                Check(rolled != null && pool.Any(e => e.MainObject.ItemID == rolled.MainObject.ItemID),
+                    "successful roll selects an item from the compatible pool", log);
+                Call(allButton, "OnPointerEnter", new object[] { null }); yield return null; yield return new WaitForEndOfFrame();
+                string hover = Get<Text>(controller, "tooltipText").text;
+                Check(hover == "Compatible · All items\nHeld: " + source.DisplayName,
+                    "successful spawner roll returns to its normal hover label: " + hover, log);
+                Call(allButton, "OnPointerExit", new object[] { null });
                 foreach (var mag in added) Object.Destroy(mag.gameObject);
             }
             var wrist = Resources.FindObjectsOfTypeAll<FVRWristMenuSection_Spawn>().First(w => w.ToolBoxPrefab != null);
