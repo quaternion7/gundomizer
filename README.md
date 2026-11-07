@@ -4,8 +4,11 @@
 
 Randomize items directly in **Item Spawner V2**, including the **toolbox tablet**, in classic and tag-search modes.
 
+**`NEW`!** Randomize Modul's parts!
+
 ## Features
 
+- **Modul parts and skins:** randomize a single slot or the whole build with Modular Workshop.
 - **Random item:** roll from the current category and its subcategories, or your selected tags, across all pages.
 - **Compatible section:** grid + link rolls items that fit what you're holding, within the current section or tags.
 - **Compatible catalog:** globe + link searches all items, with type and connector filters in its dropdown. Choices last for the session.
@@ -20,7 +23,7 @@ Randomize items directly in **Item Spawner V2**, including the **toolbox tablet*
 2. Launch H3VR using **Start modded**.
 3. Use the rainbow buttons in **Item Spawner V2** or its **toolbox tablet**.
 
-## [NEW] Modul's Support
+## Modul's Support *`NEW`*
 
 ![Modular Workshop weapon above its platform, with Gundomizer's rainbow build dice hovered during a playtest](https://raw.githubusercontent.com/quaternion7/gundomizer/main/docs/images/modular-workshop.png)
 
@@ -58,7 +61,7 @@ For feedback or support, join the [H3VR Homebrew Discord server](https://discord
 - Anton Hand and RUST LTD. for **H3VR**.
 - The **H3VR Homebrew community**, mod authors, and tool and loader maintainers.
 - **nesrak1 / AssetsTools.NET** for the bundle metadata reader library.
-- The **Modular Workshop** and modular weapon authors for their framework, platform, parts, and skins.
+- The **Modular Workshop** and modular weapon authors.
 
 ## Support
 
@@ -66,7 +69,7 @@ Tips and donations are welcome on [Ko-fi](https://ko-fi.com/quaternion7). You ca
 
 ## Changelog
 
-- **Unreleased:** Modular Workshop part, skin and build rolls; separate section/catalog buttons; quieter click feedback.
+- **1.2.0:** Modular Workshop part, skin and build rolls; separate section/catalog buttons; quieter click feedback.
 - **1.1.0:** Compatible type/connector filters, cross-category magazine rolls, a chain-link icon, and improved ModulAK indexing.
 - **1.0.2:** Fix missing buttons with OtherLoaderPatched and support its custom categories.
 - **1.0.1:** DLL-only metadata reader with reusable decompression buffers.

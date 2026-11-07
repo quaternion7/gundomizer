@@ -7,7 +7,7 @@ using HarmonyLib;
 
 namespace Gundomizer
 {
-    [BepInPlugin("quaternion.gundomizer", "Gundomizer", "1.1.0")]
+    [BepInPlugin("quaternion.gundomizer", "Gundomizer", "1.2.0")]
     [BepInProcess("h3vr.exe")]
     [BepInDependency("h3vr.otherloader", BepInDependency.DependencyFlags.SoftDependency)]
     [BepInDependency("h3vr.cityrobo.ModularWorkshopManager", BepInDependency.DependencyFlags.SoftDependency)]
@@ -60,7 +60,7 @@ namespace Gundomizer
                     prefix: new HarmonyMethod(typeof(Plugin), nameof(BeforePortableSpawn)));
                 try { ModularWorkshopBridge.Initialize(harmony); }
                 catch (Exception ex) { Logger.LogWarning("Optional Modular Workshop controls unavailable: " + ex.Message); }
-                Logger.LogInfo("Gundomizer 1.1.0 loaded. Classic and tag viewer randomizer enabled.");
+                Logger.LogInfo("Gundomizer 1.2.0 loaded. Classic and tag viewer randomizer enabled.");
                 ConnectorIndex.Start(this);
                 try { PersistentConnectorIndex.Start(this); }
                 catch (Exception ex) { Logger.LogWarning("Persistent indexing unavailable; live search remains enabled: " + ex); }

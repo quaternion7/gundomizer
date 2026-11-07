@@ -48,9 +48,12 @@ public static class RuntimeSuite
         if (File.Exists(Path.Combine(directory, "ammo-mod-checks.txt")) || File.Exists(Path.Combine(directory, "ammo-fill-checks.txt"))
             || File.Exists(Path.Combine(directory, "readme-preview.txt")) || File.Exists(Path.Combine(directory, "search-checks.txt")))
         {
-            var setup = AmmoModChecks.Prepare(directory, log);
-            try { while (setup.MoveNext()) yield return setup.Current; }
-            finally { (setup as IDisposable).Dispose(); }
+            if (BepInEx.Bootstrap.Chainloader.PluginInfos.ContainsKey("h3vr.otherloader"))
+            {
+                var setup = AmmoModChecks.Prepare(directory, log);
+                try { while (setup.MoveNext()) yield return setup.Current; }
+                finally { (setup as IDisposable).Dispose(); }
+            }
         }
         foreach (var pair in AM.STypeDic[FireArmRoundType.a9_19_Parabellum])
         {

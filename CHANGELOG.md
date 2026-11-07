@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.2.0
 
 Add optional Modular Workshop dice buttons fixed below part/skin menus, clear of paging arrows. Individual rolls exclude the current choice while preserving authored part weights.
 

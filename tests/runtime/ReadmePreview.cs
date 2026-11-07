@@ -49,7 +49,7 @@ public static class ReadmePreview
             yield return null; // Let the owner hide the tooltip before rendering the popup.
             yield return new WaitForEndOfFrame();
             var root = (RectTransform)AccessTools.Field(controller.GetType(), "uiRoot").GetValue(controller);
-            Capture(root.parent as RectTransform, Path.Combine(directory, "readme-cover.png"));
+            RenderPanel(root.parent as RectTransform, Path.Combine(directory, "readme-cover.png"), 1880, 964, .501f);
             log("README COVER CAPTURED");
         }
         finally
@@ -63,11 +63,13 @@ public static class ReadmePreview
     }
 
     private static void Capture(RectTransform canvas, string path)
+        => RenderPanel(canvas, path, 1920, 1080, .51f);
+
+    private static void RenderPanel(RectTransform canvas, string path, int width, int height, float padding)
     {
         Canvas.ForceUpdateCanvases();
         var cameraObject = new GameObject("Gundomizer README camera");
         var camera = cameraObject.AddComponent<Camera>();
-        const int width = 1920, height = 1080;
         var target = new RenderTexture(width, height, 24);
         var pixels = new Texture2D(width, height, TextureFormat.RGB24, false);
         var previous = RenderTexture.active;
@@ -83,7 +85,7 @@ public static class ReadmePreview
             camera.transform.rotation = canvas.rotation;
             camera.orthographic = true;
             camera.orthographicSize = Mathf.Max(bounds.size.y * canvas.lossyScale.y,
-                canvas.rect.width * canvas.lossyScale.x * height / width) * .51f;
+                canvas.rect.width * canvas.lossyScale.x * height / width) * padding;
             camera.nearClipPlane = .01f; camera.farClipPlane = 4;
             camera.clearFlags = CameraClearFlags.SolidColor;
             camera.backgroundColor = new Color(.04f, .04f, .04f);
