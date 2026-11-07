@@ -263,7 +263,7 @@ namespace Gundomizer
             activeButton = null;
             cancelRequested = false;
             nextClick = Time.unscaledTime + .3f;
-            Progress("Loading " + entry.DisplayName + "...");
+            Progress("Loading…");
             var metrics = new RollMetrics { Kind = "Native selection" };
             FVRPhysicalObject fillTarget = null;
             if (Plugin.AutoFillHeldItem.Value && ammoSelections.Contains(id))
@@ -292,7 +292,7 @@ namespace Gundomizer
                     yield return null;
                 }
                 metrics.BeginRequest();
-                Progress("Loading " + source.DisplayName + "... (" + (prefabs.Count + 1) + "/" + sources.Count + ")");
+                Progress("Loading… (" + (prefabs.Count + 1) + "/" + sources.Count + ")");
                 if (started) { ++metrics.NewLoads; yield return null; }
                 while (request != null && request.keepWaiting)
                 {
@@ -331,7 +331,7 @@ namespace Gundomizer
             }
             metrics.Outcome = "spawned";
             spawner.Boop(1);
-            Message("Spawned " + entry.DisplayName + fillMessage);
+            Message(fillMessage);
         }
 
         private IEnumerator Roll(bool compatible, FVRPhysicalObject held, FVRViveHand hand, bool spawnInstantly,
@@ -405,7 +405,7 @@ namespace Gundomizer
                     SelectEntry(entry, false);
                     metrics.Outcome = "selected";
                     spawner.Boop(0);
-                    Message("Selected " + entry.DisplayName + ".");
+                    Message(null);
                     yield break;
                 }
                 AnvilCallback<GameObject> request = null;
@@ -429,7 +429,7 @@ namespace Gundomizer
                         yield return null;
                     }
                 }
-                Progress("Loading " + entry.DisplayName + "... (" + (candidateIndex + 1) + "/" + candidates.Count + ")");
+                Progress("Loading… (" + (candidateIndex + 1) + "/" + candidates.Count + ")");
                 // Pace speculative loads even when an asset completes synchronously. Keep
                 // only one native request outstanding across all panels, without click budgets.
                 if (started) { ++metrics.NewLoads; yield return null; }
@@ -472,7 +472,7 @@ namespace Gundomizer
                         metrics.Outcome = "selected";
                         spawner.Boop(0);
                         Plugin.Log.LogInfo("Selected " + entry.ItemID + (compatible ? " compatible with " + Compatibility.Name(held) : ""));
-                        Message("Selected " + entry.DisplayName + ".");
+                        Message(null);
                         yield break;
                     }
                     var point = bridge.SpawnPoint(entry);
@@ -497,7 +497,7 @@ namespace Gundomizer
                     metrics.Outcome = "spawned";
                     spawner.Boop(1);
                     Plugin.Log.LogInfo("Spawned " + entry.ItemID + (compatible ? " compatible with " + Compatibility.Name(held) : ""));
-                    Message("Spawned " + entry.DisplayName + FillSpawnedAmmo(spawned, autoFill ? held : null, hand));
+                    Message(FillSpawnedAmmo(spawned, autoFill ? held : null, hand));
                     yield break;
                 }
                 if (++inspected % 8 == 0) yield return null;
@@ -558,14 +558,13 @@ namespace Gundomizer
             RefreshHeldItem(hand);
             if (!playerNearby || cachedHeldItem != target) return "";
             var fill = AmmoFill.Apply(target, round);
-            if (fill.Failed > 0) return ". Fill failed. See log.";
-            return fill.Filled > 0 ? ". Filled " + Compatibility.Name(target) + "." : "";
+            return fill.Failed > 0 ? "Fill failed. See log." : "";
         }
 
         private void Message(string message)
         {
             status = message;
-            statusUntil = Time.unscaledTime + 3.5f;
+            statusUntil = string.IsNullOrEmpty(message) ? 0 : Time.unscaledTime + 3.5f;
         }
 
         private void BuildUi()

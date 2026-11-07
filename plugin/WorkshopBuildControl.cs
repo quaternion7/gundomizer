@@ -107,7 +107,8 @@ namespace Gundomizer
             if (tooltip == null || button == null) return;
             bool show = button.Hovered;
             tooltip.transform.parent.gameObject.SetActive(show);
-            if (show) tooltip.text = Busy ? Status : "Randomize build" + (Time.unscaledTime < statusUntil ? "\n" + Status : "");
+            if (show) tooltip.text = Busy || (Time.unscaledTime < statusUntil && !string.IsNullOrEmpty(Status))
+                ? Status : "Randomize build";
         }
 
         internal void Activate()
@@ -152,7 +153,7 @@ namespace Gundomizer
                         Status = "Build unavailable. See log.";
                         yield break;
                     }
-                    if (next == null) { Status = "Randomized " + Changed + " parts, " + SkinsChanged + " skins."; yield break; }
+                    if (next == null) { Status = null; yield break; }
                     // Bound repeated changes across snapshots of an unusual author graph.
                     if (visited.Count + skinned.Count >= 512) { Status = "Slot limit reached."; yield break; }
                     if (skins) skinned.Add(next); else visited.Add(point);
@@ -160,7 +161,6 @@ namespace Gundomizer
                     if (!(skins ? ModularWorkshopBridge.TryRandomizeBuildSkin(next, out message) : ModularWorkshopBridge.TryRandomizeBuildSlot(next, out message)))
                     { Status = message; yield break; }
                     if (skins) ++SkinsChanged; else ++Changed;
-                    Status = Changed + " parts, " + SkinsChanged + " skins\nClick again to cancel.";
                     // Native destruction/menu creation settles before the next graph snapshot.
                     yield return null;
                 }

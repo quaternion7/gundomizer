@@ -111,7 +111,7 @@ public static class CompatiblePanelChecks
                 while (Get<bool>(controller, "busy") && Time.realtimeSinceStartup < deadline) yield return null;
                 Check(!Get<bool>(controller, "busy"), "compatible roll completed", log);
                 string status = Get<string>(controller, "status"); log("COMPATIBLE ROLL " + status);
-                Check(status.StartsWith(spawn ? "Spawned " : "Selected "), "global roll honors " + (spawn ? "instant spawning" : "preview selection"), log);
+                Check(string.IsNullOrEmpty(status), "successful global roll has no success notification", log);
                 var added = Object.FindObjectsOfType<FVRFireArmMagazine>().Where(m => !before.Contains(m.GetInstanceID())).ToArray();
                 Check(added.Length == (spawn ? 1 : 0), "roll creates exactly the expected number of magazines", log);
                 foreach (var mag in added) Object.Destroy(mag.gameObject);
@@ -138,7 +138,8 @@ public static class CompatiblePanelChecks
             Call(Get<object>(portableController, "allCompatibleButton"), "Activate", hands[0]);
             deadline = Time.realtimeSinceStartup + 180;
             while (Get<bool>(portableController, "busy") && Time.realtimeSinceStartup < deadline) yield return null;
-            Check(Get<string>(portableController, "status").StartsWith("Selected "), "tablet previews a compatible magazine from all categories", log);
+            Check(!Get<bool>(portableController, "busy") && string.IsNullOrEmpty(Get<string>(portableController, "status")),
+                "tablet preview finishes without a success notification", log);
             var placement = portable.transform.position + Vector3.up * .5f;
             yield return new WaitForSecondsRealtime(.4f); portable.ExternalSpawnFromLaserToPoint(placement);
             deadline = Time.realtimeSinceStartup + 120;
@@ -161,7 +162,8 @@ public static class CompatiblePanelChecks
             Call(sectionButton, "Activate", hands[0]);
             deadline = Time.realtimeSinceStartup + 120;
             while (Get<bool>(controller, "busy") && Time.realtimeSinceStartup < deadline) yield return null;
-            Check(Get<string>(controller, "status").StartsWith("Selected "), "section roll still works when global choices exclude its magazines", log);
+            Check(!Get<bool>(controller, "busy") && string.IsNullOrEmpty(Get<string>(controller, "status")),
+                "section roll still works when global choices exclude its magazines", log);
             var selected = (ItemSpawnerID)AccessTools.Method(assembly.GetType("Gundomizer.OtherLoaderBridge"), "Resolve").Invoke(null, new object[] { Get<string>(spawner, "m_selectedID") });
             var sectionPool = (List<ItemSpawnerID>)Call(bridge, "CaptureSection");
             Check(selected != null && sectionPool.Any(e => e.MainObject.ItemID == selected.MainObject.ItemID), "section roll stays inside the native category/tag pool", log);

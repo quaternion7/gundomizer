@@ -34,9 +34,11 @@ namespace Gundomizer
                 button.Ready = () => ready && menu != null && button.gameObject.activeInHierarchy && !ModularWorkshopBridge.IsBusy(menu);
                 button.Handler = hand =>
                 {
-                    if ((bool)Read("_isShowingSkins")) ModularWorkshopBridge.TryRandomizeSkin(menu, out status);
-                    else ModularWorkshopBridge.TryRandomizeSlot(menu, out status);
-                    statusUntil = Time.unscaledTime + 2;
+                    bool success = (bool)Read("_isShowingSkins")
+                        ? ModularWorkshopBridge.TryRandomizeSkin(menu, out status)
+                        : ModularWorkshopBridge.TryRandomizeSlot(menu, out status);
+                    if (success) status = null;
+                    statusUntil = success ? 0 : Time.unscaledTime + 2;
                     Refresh(menu);
                 };
                 var text = new GameObject("Gundomizer slot tooltip", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));

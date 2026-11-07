@@ -164,7 +164,7 @@ public static class WorkshopChecks
                         yield return new WaitForSecondsRealtime(.2f);
                         ControlButton(menu).GetComponent<Button>().onClick.Invoke();
                         string status = (string)Read(menu.GetComponent(controller.GetType().Assembly.GetType("Gundomizer.WorkshopSlotControl")), "status");
-                        Check(status != null && status.StartsWith("Selected "), source.ItemID + " dice click " + i + " succeeds: " + status, log);
+                        Check(string.IsNullOrEmpty(status), source.ItemID + " dice click " + i + " has no success notification: " + status, log);
                         yield return null;
                         var after = Selected(target); chosen.Add(after[group]);
                         Check(after[group] != previousPart, "individual roll never reselects the current part", log);
@@ -272,7 +272,8 @@ public static class WorkshopChecks
                         Check(!(bool)AccessTools.Method(controller.GetType().Assembly.GetType("Gundomizer.ModularWorkshopBridge"), "TryRandomizeSlot").Invoke(null, busyArgs), "slot clicks cannot interleave with build roll", log);
                         float finish = Time.realtimeSinceStartup + 20;
                         while ((bool)Property(build, "Busy") && Time.realtimeSinceStartup < finish) yield return null;
-                        Check(!(bool)Property(build, "Busy") && ((string)Property(build, "Status")).StartsWith("Randomized "), "whole-build roll finishes: " + Property(build, "Status"), log);
+                        Check(!(bool)Property(build, "Busy") && string.IsNullOrEmpty((string)Property(build, "Status")),
+                            "whole-build roll finishes without a success summary: " + Property(build, "Status"), log);
                         Check(slot.HeldObject == physical, "whole-build roll retains the original receiver", log);
                         var skinDefinitions = (IDictionary)AccessTools.Field(manager, "ModularWorkshopSkinsDictionary").GetValue(null);
                         var backend = Property(targetObject, "GetModularFVRFireArm");
