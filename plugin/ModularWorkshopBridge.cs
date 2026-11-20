@@ -1,6 +1,5 @@
 using System;
 using System.Collections;
-using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using HarmonyLib;
@@ -57,7 +56,7 @@ namespace Gundomizer
         internal static bool CanRandomizeSlot(MonoBehaviour menu, bool wholeBuild = false)
         {
             object definition; string message;
-            try { return TryDefinition(menu, out definition, out message, wholeBuild); }
+            try { return TrySlot(menu, wholeBuild, out definition, out message); }
             catch { return false; }
         }
 
@@ -76,28 +75,27 @@ namespace Gundomizer
                 if (wholeBuild && (bool)Read(menu, "_isShowingSkins"))
                     AccessTools.Method(menu.GetType(), "PButton_HideSkins").Invoke(menu, null);
                 object definition;
-                if (!TryDefinition(menu, out definition, out message)) return false;
+                if (!TrySlot(menu, wholeBuild, out definition, out message)) return false;
                 var type = menu.GetType();
-                string selected;
-                if (wholeBuild) selected = (string)AccessTools.Method(definition.GetType(), "GetRandomPart").Invoke(definition, null);
-                else
-                {
-                    var pool = (IList<string>)AccessTools.Property(definition.GetType(), "TakeAndHoldSpawnPool").GetValue(definition, null);
-                    int choice = SelectionPolicy.AlternativeIndex(pool, CurrentPoint(menu), n => UnityEngine.Random.Range(0, n));
-                    if (choice < 0) { message = "No other parts."; return false; }
-                    selected = pool[choice];
-                }
-
-                // The normal menu action applies only this slot. In particular, do not use
-                // isRandomized=true: that also randomizes nested parts and skins in MW.
+                // PButton_Select uses the native menu's page and row. Its part list spans all pages.
                 AccessTools.Method(type, "InitializeArrays").Invoke(menu, null);
                 var names = (string[])Read(menu, "_partNames");
-                int index = Array.IndexOf(names, selected);
+                int index;
+                if (wholeBuild)
+                {
+                    string selected = (string)AccessTools.Method(definition.GetType(), "GetRandomPart").Invoke(definition, null);
+                    index = Array.IndexOf(names, selected);
+                }
+                else
+                {
+                    index = SelectionPolicy.AlternativeIndex(names, CurrentPoint(menu), n => UnityEngine.Random.Range(0, n));
+                    if (index < 0) { message = "No other parts."; return false; }
+                }
                 int pageSize = ((GameObject[])Read(menu, "PartButtons")).Length;
                 if (index < 0 || pageSize == 0) { message = "Part unavailable."; return false; }
                 AccessTools.Field(type, "_pageIndex").SetValue(menu, index / pageSize);
                 AccessTools.Method(type, "PButton_Select").Invoke(menu, new object[] { index % pageSize });
-                message = "Selected " + selected + ".";
+                message = "Selected " + names[index] + ".";
                 return true;
             }
             catch (Exception ex)
@@ -109,7 +107,7 @@ namespace Gundomizer
             }
         }
 
-        private static bool TryDefinition(MonoBehaviour menu, out object definition, out string message, bool wholeBuild = false)
+        private static bool TrySlot(MonoBehaviour menu, bool wholeBuild, out object definition, out string message)
         {
             definition = null; message = "Slot unavailable.";
             if (menu == null) return false;
@@ -124,7 +122,16 @@ namespace Gundomizer
             var points = (IDictionary)AccessTools.Property(target.GetType(), "AllAttachmentPoints").GetValue(target, null);
             if (!points.Contains(group)) { message = "Slot unavailable."; return false; }
             var point = points[group];
-            if ((bool)Read(point, "IsPointDisabled") || (bool)Read(point, "DisallowTakeAndHoldRandomization"))
+            if ((bool)Read(point, "IsPointDisabled")) return false;
+            string current = (string)Read(point, "SelectedModularWeaponPart");
+            if (!wholeBuild)
+            {
+                var names = (string[])Read(menu, "_partNames");
+                if (names != null && names.Any(id => id != current)) return true;
+                message = "No other parts.";
+                return false;
+            }
+            if ((bool)Read(point, "DisallowTakeAndHoldRandomization"))
             { message = "Slot excluded."; return false; }
             var manager = type.Assembly.GetType("ModularWorkshop.ModularWorkshopManager", true);
             var groups = (IDictionary)AccessTools.Field(manager, "ModularWorkshopPartsGroupsDictionary").GetValue(null);
@@ -132,7 +139,7 @@ namespace Gundomizer
             definition = groups[group];
             var pool = (IList)AccessTools.Property(definition.GetType(), "TakeAndHoldSpawnPool").GetValue(definition, null);
             if (pool.Count == 0) { message = "No eligible parts."; return false; }
-            if (!wholeBuild && !pool.Cast<string>().Any(id => id != (string)Read(point, "SelectedModularWeaponPart")))
+            if (!pool.Cast<string>().Any(id => id != current))
             { message = "No other parts."; return false; }
             return true;
         }

@@ -38,7 +38,7 @@ public static class WorkshopChecks
         Check(groups.Count > 0, "native modular part definitions registered", log);
         log("WORKSHOP groups=" + groups.Count);
         foreach (var source in IM.OD.Values.Where(o => o.ItemID.ToLowerInvariant().Contains("platform")
-            || (o.Category == FVRObject.ObjectCategory.Firearm && (o.ItemID.ToLowerInvariant().Contains("xm8") || o.ItemID.ToLowerInvariant().Contains("pmm")))))
+            || (o.Category == FVRObject.ObjectCategory.Firearm && (o.ItemID == "Volks_ModulXM8_Base" || o.ItemID == "PMM9mm"))))
             log("WORKSHOP CANDIDATE " + source.ItemID + " name=" + source.DisplayName);
         var created = new List<GameObject>();
         try
@@ -65,7 +65,7 @@ public static class WorkshopChecks
             var slot = (FVRQuickBeltSlot)Read(platform, "QuickBeltSlot");
             int fixtureCount = 0, rollCount = 0;
             var candidates = IM.OD.Values.Where(o => o.Category == FVRObject.ObjectCategory.Firearm
-                && (o.ItemID.ToLowerInvariant().Contains("xm8") || o.ItemID.ToLowerInvariant().Contains("pmm"))).ToArray();
+                && (o.ItemID == "Volks_ModulXM8_Base" || o.ItemID == "PMM9mm")).ToArray();
             foreach (var source in candidates)
             {
                 var request = source.GetGameObjectAsync();
@@ -155,7 +155,7 @@ public static class WorkshopChecks
                     WatchMenu(spectator, menu);
                     CheckControl(menu, log);
                     Capture(menu, Path.Combine(directory, source.ItemID + "-slot-before.png"));
-                    var roll = AccessTools.Method(controller.GetType().Assembly.GetType("Gundomizer.ModularWorkshopBridge"), "TryRandomizeSlot");
+                    var menuParts = (string[])Read(menu, "_partNames");
                     var before = Selected(target); var chosen = new HashSet<string>();
                     var dicePosition = ControlButton(menu).transform.localPosition;
                     for (int i = 0; i < 8; ++i)
@@ -174,7 +174,7 @@ public static class WorkshopChecks
                         var after = Selected(target); chosen.Add(after[group]);
                         Check(after[group] != previousPart, "individual roll never reselects the current part", log);
                         Check(ControlButton(menu).transform.localPosition == dicePosition, "dice does not move after a part roll", log);
-                        Check(pool.Cast<string>().Contains(after[group]), "selected part belongs to native weighted pool", log);
+                        Check(menuParts.Contains(after[group]), "selected part belongs to the native menu", log);
                         Check(before.All(p => p.Key == group || (after.ContainsKey(p.Key) && after[p.Key] == p.Value)), "unrelated slots retain their selections", log);
                         ++rollCount;
                     }
@@ -182,14 +182,44 @@ public static class WorkshopChecks
                     yield return new WaitForEndOfFrame(); Capture(menu, Path.Combine(directory, source.ItemID + "-slot-after.png"));
                     bool prior = (bool)Read(point, "DisallowTakeAndHoldRandomization");
                     AccessTools.Field(point.GetType(), "DisallowTakeAndHoldRandomization").SetValue(point, true);
-                    object[] excludedArgs = { menu, null };
+                    string previous = (string)Read(point, "SelectedModularWeaponPart");
                     try
                     {
                         Call(menu, "UpdateDisplay"); yield return new WaitForEndOfFrame();
-                        Check(!ControlButton(menu).GetComponent<Button>().interactable, "author-excluded slot dice is disabled", log);
-                        Check(!(bool)roll.Invoke(null, excludedArgs), "author-excluded slots cannot be randomized", log);
+                        var die = ControlButton(menu).GetComponent<Button>();
+                        Check(die.interactable, "T&H exclusion leaves the manual slot die enabled", log);
+                        yield return new WaitForSecondsRealtime(.2f);
+                        die.onClick.Invoke();
+                        string selected = (string)Read(point, "SelectedModularWeaponPart");
+                        Check(selected != previous && menuParts.Contains(selected), "manual roll changes a T&H-excluded slot", log);
                     }
                     finally { AccessTools.Field(point.GetType(), "DisallowTakeAndHoldRandomization").SetValue(point, prior); Call(menu, "UpdateDisplay"); }
+                    // Keep the menu intact while removing every alternative from the T&H spawn table.
+                    var alternatives = prefabs.Cast<GameObject>()
+                        .Select(p => p.GetComponent(mw.GetType("ModularWorkshop.ModularWeaponPart")))
+                        .Where(p => (string)Read(p, "Name") != (string)Read(point, "SelectedModularWeaponPart")
+                            && !(bool)Read(p, "RemovedFromSpawnTable")).Distinct().ToArray();
+                    try
+                    {
+                        foreach (var part in alternatives)
+                            AccessTools.Field(part.GetType(), "RemovedFromSpawnTable").SetValue(part, true);
+                        previous = (string)Read(point, "SelectedModularWeaponPart");
+                        Check(((IList)Property(definition, "TakeAndHoldSpawnPool")).Cast<string>().All(id => id == previous),
+                            "spawn table has no alternatives while the native menu still does", log);
+                        Call(menu, "UpdateDisplay");
+                        yield return new WaitForSecondsRealtime(.2f);
+                        var die = ControlButton(menu).GetComponent<Button>();
+                        Check(die.interactable, "manual slot die stays enabled with no spawn-table alternatives", log);
+                        die.onClick.Invoke();
+                        string selected = (string)Read(point, "SelectedModularWeaponPart");
+                        Check(selected != previous && menuParts.Contains(selected), "manual roll can pick a menu-only part", log);
+                    }
+                    finally
+                    {
+                        foreach (var part in alternatives)
+                            AccessTools.Field(part.GetType(), "RemovedFromSpawnTable").SetValue(part, false);
+                        Call(menu, "UpdateDisplay");
+                    }
                     Call(menu, "PButton_HideUI");
                     break;
                 }
@@ -252,7 +282,9 @@ public static class WorkshopChecks
                 foreach (int x in new[] { -1, 1 }) foreach (int y in new[] { -1, 1 }) foreach (int z in new[] { -1, 1 })
                     inCogFrame.Encapsulate(cog.transform.InverseTransformPoint(diceBox.transform.TransformPoint(diceBox.center + Vector3.Scale(diceBox.size * .5f, new Vector3(x, y, z)))));
                 Check(!new Bounds(cog.center, cog.size).Intersects(inCogFrame), "build dice hitbox is separate from native cog", log);
-                Call(buildButton, "OnPointerEnter", new object[] { null }); yield return new WaitForEndOfFrame();
+                // The previous fixture deliberately cancelled a roll on this same platform.
+                while (Time.unscaledTime < (float)Read(build, "statusUntil")) yield return null;
+                Call(buildButton, "OnPointerEnter", new object[] { null }); yield return null; yield return new WaitForEndOfFrame();
                 Check(((Text)Read(build, "tooltip")).text.StartsWith("Randomize build"), "build hover identifies the whole-build action", log);
                 CaptureBuild(platform, buildButton, ViewerFront(spawner), Path.Combine(directory, source.ItemID + "-build-control.png"));
                 CapturePlatform(platform.gameObject, instance, menus[0], Path.Combine(directory, source.ItemID + "-build-hover.jpg"));

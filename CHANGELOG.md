@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.1
+
+Fixed greyed-out slot dice on Modul weapons such as the ModulAK2Lite. Each slot die can now pick any other part you can select in that menu, across all pages. Whole-build rolls still follow the weapon author’s Take & Hold rules.
+
 ## 1.2.0
 
 Add optional Modular Workshop dice buttons fixed below part/skin menus, clear of paging arrows. Individual rolls exclude the current choice while preserving authored part weights.

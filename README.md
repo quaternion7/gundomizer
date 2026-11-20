@@ -29,10 +29,10 @@ Randomize items directly in **Item Spawner V2**, including the **toolbox tablet*
 
 For weapons using **Modular Workshop**:
 
-- **Slot dice:** reroll that part or skin without repeating the current choice.
+- **Slot dice:** pick a different part or skin from any page of that slot’s menu.
 - **Platform dice:** reroll the whole build, including nested parts and skins. Click again to cancel.
 
-Uses the weapon author's randomization pools and exclusions. Modular Workshop is optional.
+Whole-build rolls follow the weapon author’s Take & Hold rules. Modular Workshop is optional.
 
 ## Mod compatibility
 
@@ -69,6 +69,7 @@ Tips and donations are welcome on [Ko-fi](https://ko-fi.com/quaternion7). You ca
 
 ## Changelog
 
+- **1.2.1:** Fixed greyed-out slot dice on manually selectable Modul parts.
 - **1.2.0:** Modular Workshop part, skin and build rolls; separate section/catalog buttons; quieter click feedback.
 - **1.1.0:** Compatible type/connector filters, cross-category magazine rolls, a chain-link icon, and improved ModulAK indexing.
 - **1.0.2:** Fix missing buttons with OtherLoaderPatched and support its custom categories.
